@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "rslox"
+name = "rlox"
 version = "0.1.0"
