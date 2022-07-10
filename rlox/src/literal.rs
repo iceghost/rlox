@@ -1,9 +1,33 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(f64),
     String(String),
     Boolean(bool),
     Nil,
+}
+
+impl From<f64> for Literal {
+    fn from(n: f64) -> Self {
+        Self::Number(n)
+    }
+}
+
+impl From<String> for Literal {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
+impl From<bool> for Literal {
+    fn from(b: bool) -> Self {
+        Self::Boolean(b)
+    }
+}
+
+impl From<()> for Literal {
+    fn from(_: ()) -> Self {
+        Self::Nil
+    }
 }
 
 impl std::fmt::Display for Literal {

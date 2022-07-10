@@ -17,11 +17,7 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Expr> {
-        let exp = self.expression();
-        if let Err(ParseError::Custom(ref token, ref message)) = exp {
-            Lox::error(token, message);
-        }
-        exp
+        self.expression()
     }
 
     fn expression(&mut self) -> Result<Expr> {

@@ -1,16 +1,19 @@
 use std::{io::BufRead, process::exit};
 
+use interpreter::{RuntimeError, Interpreter};
 use parser::Parser;
 use scanner::Scanner;
 use token::Token;
 use token_type::TokenTy;
+mod ast_printer;
 mod expr;
+mod interpreter;
 mod literal;
+mod object;
 mod parser;
 mod scanner;
 mod token;
 mod token_type;
-mod ast_printer;
 
 fn main() {
     let mut args = std::env::args();
@@ -28,6 +31,7 @@ fn main() {
 #[derive(Default)]
 struct Lox {
     had_error: bool,
+    had_runtime_error: bool,
 }
 
 impl Lox {
@@ -59,23 +63,33 @@ impl Lox {
 
         let mut parser = Parser::new(tokens);
 
-        let expr = parser.parse();
+        let expr = parser.parse().unwrap();
 
         if self.had_error {
-            return
+            return;
         }
 
-        if let Ok(expr) = expr {
-            println!("{}", ast_printer::ast_to_string(&expr));
-        }
+        let mut interpreter = Interpreter;
+
+        interpreter.interpret(&expr);
     }
 
-    fn error(token: &Token, message: &str) {
+    fn error(&mut self, token: &Token, message: &str) {
         if token.ty == TokenTy::Eof {
             Self::report(token.line, " at end", message);
         } else {
-            Self::report(token.line, &format!(" at '{}'", token.lexeme), message)
+            Self::report(token.line, &format!(" at '{}'", token.lexeme), message);
         }
+        self.had_error = true;
+    }
+
+    fn runtime_error(&mut self, error: RuntimeError) {
+        match error {
+            RuntimeError::Custom(token, message) => {
+                println!("{message}\n[line {}]", token.line);
+            }
+        }
+        self.had_runtime_error = true;
     }
 
     fn report(line: usize, location: &str, message: &str) {
