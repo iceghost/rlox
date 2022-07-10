@@ -1,8 +1,8 @@
-use std::{io::BufRead, process::exit};
+use std::{borrow::Cow, io::BufRead, process::exit};
 
-use interpreter::{RuntimeError, Interpreter};
-use parser::Parser;
-use scanner::Scanner;
+use interpreter::{Interpreter, RuntimeError};
+use parser::{ParseError, Parser};
+use scanner::{ScanError, Scanner};
 use token::Token;
 use token_type::TokenTy;
 mod ast_printer;
@@ -30,7 +30,7 @@ fn main() {
 
 #[derive(Default)]
 struct Lox {
-    had_error: bool,
+    had_input_error: bool,
     had_runtime_error: bool,
 }
 
@@ -40,8 +40,12 @@ impl Lox {
             std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("failed to open {}", path));
         self.run(program);
 
-        if self.had_error {
+        if self.had_input_error {
             exit(65);
+        }
+
+        if self.had_runtime_error {
+            exit(70);
         }
     }
 
@@ -53,46 +57,83 @@ impl Lox {
                 break;
             }
             self.run(line);
-            self.had_error = false;
+            self.had_input_error = false;
+            self.had_runtime_error = false;
         }
     }
 
     fn run(&mut self, source: String) {
         let scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
+
+        let tokens = match scanner.scan_tokens() {
+            Ok(tokens) => tokens,
+            Err(err) => {
+                self.had_input_error = true;
+                return self.scan_error(err);
+            }
+        };
 
         let mut parser = Parser::new(tokens);
 
-        let expr = parser.parse().unwrap();
+        let expr = match parser.parse() {
+            Ok(expr) => expr,
+            Err(err) => {
+                self.had_input_error = true;
+                return self.parse_error(err);
+            }
+        };
 
-        if self.had_error {
-            return;
+        let interpreter = Interpreter;
+
+        match interpreter.interpret(&expr) {
+            Ok(_) => {}
+            Err(err) => {
+                self.had_runtime_error = true;
+                self.runtime_error(err)
+            }
         }
-
-        let mut interpreter = Interpreter;
-
-        interpreter.interpret(&expr);
     }
 
-    fn error(&mut self, token: &Token, message: &str) {
-        if token.ty == TokenTy::Eof {
-            Self::report(token.line, " at end", message);
-        } else {
-            Self::report(token.line, &format!(" at '{}'", token.lexeme), message);
+    fn scan_error(&mut self, err: ScanError) {
+        match err {
+            ScanError::Custom(line, message) => {
+                self.report(line, "".into(), message);
+            }
+            ScanError::Multiple(errs) => {
+                for err in errs {
+                    self.scan_error(err);
+                }
+            }
         }
-        self.had_error = true;
+    }
+
+    fn parse_error(&mut self, err: ParseError) {
+        match err {
+            ParseError::Custom(token, message) => {
+                if token.ty == TokenTy::Eof {
+                    self.report(token.line, " at end".into(), message.into());
+                } else {
+                    self.report(
+                        token.line,
+                        format!(" at '{}'", token.lexeme).into(),
+                        message.into(),
+                    );
+                }
+            }
+        }
     }
 
     fn runtime_error(&mut self, error: RuntimeError) {
         match error {
             RuntimeError::Custom(token, message) => {
-                println!("{message}\n[line {}]", token.line);
+                eprintln!("{message}\n[line {}]", token.line);
             }
         }
         self.had_runtime_error = true;
     }
 
-    fn report(line: usize, location: &str, message: &str) {
+    fn report(&mut self, line: usize, location: Cow<'_, str>, message: Cow<'_, str>) {
         eprintln!("[line {}] Error {}: {}", line, location, message);
+        self.had_input_error = true;
     }
 }

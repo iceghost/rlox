@@ -117,12 +117,12 @@ impl Parser {
             Ok(Expr::Literal(self.previous().clone().literal.unwrap()))
         } else if self.matches([TokenTy::LeftParen]) {
             let expr = self.expression()?;
-            self.comsume(TokenTy::RightParen, "Expect ')' after expression.")?;
+            self.comsume(TokenTy::RightParen, "Expect ')' after expression.".into())?;
             Ok(Expr::Grouping(Box::new(expr)))
         } else {
             Err(ParseError::Custom(
                 self.peek().clone(),
-                "Expect expression.".to_owned(),
+                "Expect expression.".into(),
             ))
         }
     }
@@ -153,11 +153,11 @@ impl Parser {
         }
     }
 
-    fn comsume(&mut self, ty: TokenTy, message: &str) -> Result<&Token> {
+    fn comsume(&mut self, ty: TokenTy, message: std::borrow::Cow<'static, str>) -> Result<&Token> {
         if self.check(ty) {
             Ok(self.advance())
         } else {
-            Err(ParseError::Custom(self.peek().clone(), message.to_owned()))
+            Err(ParseError::Custom(self.peek().clone(), message))
         }
     }
 
@@ -197,7 +197,7 @@ impl Parser {
 #[derive(Error, Debug)]
 pub enum ParseError {
     #[error("{1}")]
-    Custom(Token, String),
+    Custom(Token, std::borrow::Cow<'static, str>),
 }
 
 type Result<T> = std::result::Result<T, ParseError>;

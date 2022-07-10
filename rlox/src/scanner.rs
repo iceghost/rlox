@@ -26,6 +26,7 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: usize,
+    pub errors: Vec<ScanError>,
 }
 
 impl Scanner {
@@ -36,14 +37,18 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    pub fn scan_tokens(mut self) -> Result<Vec<Token>> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
         self.tokens
             .push(Token::new(TokenTy::Eof, String::new(), None, self.line));
-        self.tokens
+        if self.errors.is_empty() {
+            Ok(self.tokens)
+        } else {
+            Err(ScanError::Multiple(self.errors))
+        }
     }
 
     fn scan_token(&mut self) {
@@ -124,8 +129,9 @@ impl Scanner {
                     self.add_token(TokenTy::Identifier);
                 }
             }
-            // _ => Lox::error(self.line, "Unexpected character."),
-            _ => panic!("Unexpected character"),
+            _ => self
+                .errors
+                .push(ScanError::Custom(self.line, "Unexpected character.".into())),
         }
     }
 
@@ -144,7 +150,7 @@ impl Scanner {
 
         let value = &self.source.as_bytes()[self.start..self.current];
         let value = String::from_utf8_lossy(value);
-        let value: f64 = value.parse().expect("failed to parse number literal");
+        let value: f64 = value.parse().unwrap();
         self.add_literal(TokenTy::Number, Literal::Number(value));
     }
 
@@ -165,8 +171,8 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            // Lox::error(self.line, "Unterminated string.");
-            panic!("unexpected character");
+            self.errors
+                .push(ScanError::Custom(self.line, "Unterminated string.".into()));
         }
 
         // closing "
@@ -221,4 +227,11 @@ impl Scanner {
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
+}
+
+type Result<T> = std::result::Result<T, ScanError>;
+
+pub enum ScanError {
+    Custom(usize, std::borrow::Cow<'static, str>),
+    Multiple(Vec<ScanError>),
 }
