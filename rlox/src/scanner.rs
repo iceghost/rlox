@@ -124,7 +124,8 @@ impl Scanner {
                     self.add_token(TokenTy::Identifier);
                 }
             }
-            _ => Lox::error(self.line, "Unexpected character."),
+            // _ => Lox::error(self.line, "Unexpected character."),
+            _ => panic!("Unexpected character"),
         }
     }
 
@@ -164,7 +165,8 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Lox::error(self.line, "Unterminated string.");
+            // Lox::error(self.line, "Unterminated string.");
+            panic!("unexpected character");
         }
 
         // closing "

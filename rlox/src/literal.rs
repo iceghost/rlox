@@ -1,6 +1,9 @@
+#[derive(Debug, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),
+    Boolean(bool),
+    Nil,
 }
 
 impl std::fmt::Display for Literal {
@@ -8,6 +11,8 @@ impl std::fmt::Display for Literal {
         match self {
             Literal::Number(n) => n.fmt(f),
             Literal::String(s) => s.fmt(f),
+            Literal::Boolean(b) => b.fmt(f),
+            Literal::Nil => "nil".fmt(f),
         }
     }
 }

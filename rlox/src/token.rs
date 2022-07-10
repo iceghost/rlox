@@ -1,10 +1,11 @@
 use crate::{literal::Literal, token_type::TokenTy};
 
+#[derive(Debug, Clone)]
 pub struct Token {
-    ty: TokenTy,
-    lexeme: String,
-    literal: Option<Literal>,
-    line: usize,
+    pub ty: TokenTy,
+    pub lexeme: String,
+    pub literal: Option<Literal>,
+    pub line: usize,
 }
 
 impl Token {

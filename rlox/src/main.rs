@@ -1,10 +1,16 @@
 use std::{io::BufRead, process::exit};
 
+use parser::Parser;
 use scanner::Scanner;
+use token::Token;
+use token_type::TokenTy;
+mod expr;
 mod literal;
+mod parser;
 mod scanner;
 mod token;
 mod token_type;
+mod ast_printer;
 
 fn main() {
     let mut args = std::env::args();
@@ -48,17 +54,28 @@ impl Lox {
     }
 
     fn run(&mut self, source: String) {
-        let mut scanner = Scanner::new(source);
-
+        let scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens();
 
-        for token in tokens {
-            println!("{token}");
+        let mut parser = Parser::new(tokens);
+
+        let expr = parser.parse();
+
+        if self.had_error {
+            return
+        }
+
+        if let Ok(expr) = expr {
+            println!("{}", ast_printer::ast_to_string(&expr));
         }
     }
 
-    fn error(line: usize, message: &str) {
-        Self::report(line, "", message);
+    fn error(token: &Token, message: &str) {
+        if token.ty == TokenTy::Eof {
+            Self::report(token.line, " at end", message);
+        } else {
+            Self::report(token.line, &format!(" at '{}'", token.lexeme), message)
+        }
     }
 
     fn report(line: usize, location: &str, message: &str) {
