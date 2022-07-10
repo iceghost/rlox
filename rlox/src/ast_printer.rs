@@ -1,5 +1,6 @@
 use crate::expr::Expr;
 
+#[allow(unused)]
 pub fn ast_to_string(expr: &Expr) -> String {
     match expr {
         Expr::Binary {
@@ -15,12 +16,12 @@ pub fn ast_to_string(expr: &Expr) -> String {
 
 fn parenthesize(name: &str, exprs: &[&Expr]) -> String {
     let mut str = String::new();
-    str.push_str("(");
+    str.push('(');
     str.push_str(name);
     for expr in exprs {
-        str.push_str(" ");
+        str.push(' ');
         str.push_str(&ast_to_string(expr));
     }
-    str.push_str(")");
+    str.push(')');
     str
 }

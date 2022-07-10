@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{expr::Expr, literal::Literal, token::Token, token_type::TokenTy, Lox};
+use crate::{expr::Expr, literal::Literal, token::Token, token_type::TokenTy};
 
 #[derive(Default)]
 pub struct Parser {
@@ -127,6 +127,7 @@ impl Parser {
         }
     }
 
+    #[allow(unused)]
     fn synchonize(&mut self) {
         self.advance();
 

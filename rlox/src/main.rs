@@ -3,8 +3,8 @@ use std::{borrow::Cow, io::BufRead, process::exit};
 use interpreter::{Interpreter, RuntimeError};
 use parser::{ParseError, Parser};
 use scanner::{ScanError, Scanner};
-use token::Token;
 use token_type::TokenTy;
+
 mod ast_printer;
 mod expr;
 mod interpreter;
@@ -111,12 +111,12 @@ impl Lox {
         match err {
             ParseError::Custom(token, message) => {
                 if token.ty == TokenTy::Eof {
-                    self.report(token.line, " at end".into(), message.into());
+                    self.report(token.line, " at end".into(), message);
                 } else {
                     self.report(
                         token.line,
                         format!(" at '{}'", token.lexeme).into(),
-                        message.into(),
+                        message,
                     );
                 }
             }

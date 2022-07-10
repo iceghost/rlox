@@ -1,6 +1,4 @@
-use std::any::Any;
-
-use crate::{expr::Expr, literal::Literal, object::Object, token::Token, token_type::TokenTy, Lox};
+use crate::{expr::Expr, literal::Literal, object::Object, token::Token, token_type::TokenTy};
 
 pub struct Interpreter;
 

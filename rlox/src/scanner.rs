@@ -1,4 +1,4 @@
-use crate::{literal::Literal, token::Token, token_type::TokenTy, Lox};
+use crate::{literal::Literal, token::Token, token_type::TokenTy};
 
 static KEYWORDS: phf::Map<&'static str, TokenTy> = phf::phf_map! {
     "and" =>    TokenTy::And,
