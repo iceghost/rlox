@@ -1,16 +1,20 @@
+use std::borrow::Cow;
+
 use crate::expr::Expr;
 
 #[allow(unused)]
-pub fn ast_to_string(expr: &Expr) -> String {
+pub fn ast_to_string(expr: &Expr) -> Cow<'_, str> {
     match expr {
         Expr::Binary {
             left,
             operator,
             right,
-        } => parenthesize(&operator.lexeme, &[left, right]),
-        Expr::Grouping(expr) => parenthesize("group", &[expr]),
-        Expr::Literal(lit) => format!("{lit}"),
-        Expr::Unary { operator, right } => parenthesize(&operator.lexeme, &[right]),
+        } => parenthesize(&operator.lexeme, &[left, right]).into(),
+        Expr::Grouping(expr) => parenthesize("group", &[expr]).into(),
+        Expr::Literal(lit) => format!("{lit}").into(),
+        Expr::Unary { operator, right } => parenthesize(&operator.lexeme, &[right]).into(),
+        Expr::Variable(name) => (&name.lexeme).into(),
+        _ => unimplemented!(),
     }
 }
 

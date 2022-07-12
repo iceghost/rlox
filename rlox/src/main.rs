@@ -6,19 +6,22 @@ use scanner::{ScanError, Scanner};
 use token_type::TokenTy;
 
 mod ast_printer;
+mod environment;
 mod expr;
 mod interpreter;
 mod literal;
 mod object;
 mod parser;
 mod scanner;
+mod stmt;
 mod token;
 mod token_type;
 
 fn main() {
     let mut args = std::env::args();
-    if args.len() > 1 {
-        println!("Usage: rslox [script]")
+    if args.len() > 2 {
+        println!("Usage: rslox [script]");
+        exit(1);
     }
     args.next(); // first arg is program name, e.g rslox
     let mut lox = Lox::default();
@@ -29,12 +32,13 @@ fn main() {
 }
 
 #[derive(Default)]
-struct Lox {
+struct Lox<'intpr> {
     had_input_error: bool,
     had_runtime_error: bool,
+    interpreter: Interpreter<'intpr>,
 }
 
-impl Lox {
+impl<'intpr> Lox<'intpr> {
     fn run_file(&mut self, path: String) {
         let program =
             std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("failed to open {}", path));
@@ -73,19 +77,17 @@ impl Lox {
             }
         };
 
-        let mut parser = Parser::new(tokens);
+        let parser = Parser::new(tokens);
 
-        let expr = match parser.parse() {
-            Ok(expr) => expr,
+        let statements = match parser.parse() {
+            Ok(statements) => statements,
             Err(err) => {
                 self.had_input_error = true;
                 return self.parse_error(err);
             }
         };
 
-        let interpreter = Interpreter;
-
-        match interpreter.interpret(&expr) {
+        match self.interpreter.interpret(&statements) {
             Ok(_) => {}
             Err(err) => {
                 self.had_runtime_error = true;
@@ -118,6 +120,11 @@ impl Lox {
                         format!(" at '{}'", token.lexeme).into(),
                         message,
                     );
+                }
+            }
+            ParseError::Multiple(errs) => {
+                for err in errs {
+                    self.parse_error(err);
                 }
             }
         }

@@ -1,14 +1,68 @@
-use crate::{expr::Expr, literal::Literal, object::Object, token::Token, token_type::TokenTy};
+use crate::{
+    environment::{Environment, EnvironmentPointer},
+    expr::Expr,
+    literal::Literal,
+    object::Object,
+    stmt::Stmt,
+    token::Token,
+    token_type::TokenTy,
+};
 
-pub struct Interpreter;
+#[derive(Default)]
+pub struct Interpreter<'a> {
+    environment: EnvironmentPointer<'a>,
+}
 
-impl Interpreter {
-    pub fn interpret(&self, expr: &Expr) -> Result<()> {
-        let obj = self.evaluate(expr)?;
-        println!("{obj}");
+impl<'a> Interpreter<'a> {
+    pub fn interpret(&mut self, statements: &Vec<Stmt>) -> Result<()> {
+        for statement in statements {
+            self.execute(statement)?;
+        }
         Ok(())
     }
-    fn evaluate(&self, expr: &Expr) -> Result<Object> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+        match stmt {
+            Stmt::Expression(expr) => {
+                self.evaluate(expr)?;
+            }
+            Stmt::Print(expr) => {
+                let value = self.evaluate(expr)?;
+                println!("{value}");
+            }
+            Stmt::Var { name, initializer } => {
+                let value = initializer
+                    .as_ref()
+                    .map_or(Ok(().into()), |expr| self.evaluate(expr))?;
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme.to_owned(), value);
+            }
+            Stmt::Block(stmts) => {
+                self.execute_block(stmts, Environment::new(self.environment.clone()))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn execute_block(&mut self, statements: &[Stmt], env: EnvironmentPointer<'a>) -> Result<()> {
+        let previous = self.environment.clone();
+        self.environment = env;
+
+        for stmt in statements {
+            match self.execute(stmt) {
+                Ok(_) => continue,
+                Err(err) => {
+                    self.environment = previous;
+                    return Err(err);
+                },
+            }
+        }
+
+        self.environment = previous;
+        Ok(())
+    }
+
+    fn evaluate(&mut self, expr: &Expr) -> Result<Object> {
         match expr {
             Expr::Binary {
                 left,
@@ -90,6 +144,12 @@ impl Interpreter {
                     _ => unreachable!(),
                 }
             }
+            Expr::Variable(name) => Ok(self.environment.borrow().get(name)?),
+            Expr::Assign { name, value } => {
+                let value = self.evaluate(value)?;
+                self.environment.borrow_mut().assign(name, value.clone())?;
+                Ok(value)
+            }
         }
     }
 
@@ -133,7 +193,7 @@ impl Interpreter {
     }
 }
 
-type Result<T> = std::result::Result<T, RuntimeError>;
+pub type Result<T> = std::result::Result<T, RuntimeError>;
 
 pub enum RuntimeError {
     Custom(Token, std::borrow::Cow<'static, str>),

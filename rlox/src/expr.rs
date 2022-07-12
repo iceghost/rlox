@@ -12,4 +12,9 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Variable(Token),
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
 }
