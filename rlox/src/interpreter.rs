@@ -54,7 +54,7 @@ impl<'a> Interpreter<'a> {
                 Err(err) => {
                     self.environment = previous;
                     return Err(err);
-                },
+                }
             }
         }
 
@@ -77,13 +77,13 @@ impl<'a> Interpreter<'a> {
                         if let Ok((left, right)) =
                             Self::check_number_operands(operator, &left, &right)
                         {
-                            Ok(Object::Literal(Literal::Number(left + right)))
+                            Ok((left + right).into())
                         } else {
                             match (left, right) {
                                 (
                                     Object::Literal(Literal::String(left)),
                                     Object::Literal(Literal::String(right)),
-                                ) => Ok(Object::Literal(Literal::String([left, right].join("")))),
+                                ) => Ok([left, right].join("").into()),
                                 _ => Err(RuntimeError::Custom(
                                     operator.clone(),
                                     "Operands must be two numbers or two strings.".into(),
@@ -119,12 +119,8 @@ impl<'a> Interpreter<'a> {
                         let (left, right) = Self::check_number_operands(operator, &left, &right)?;
                         Ok((left <= right).into())
                     }
-                    TokenTy::EqualEqual => Ok(Object::Literal(Literal::Boolean(Self::is_equal(
-                        left, right,
-                    )))),
-                    TokenTy::BangEqual => Ok(Object::Literal(Literal::Boolean(!Self::is_equal(
-                        left, right,
-                    )))),
+                    TokenTy::EqualEqual => Ok(Self::is_equal(left, right).into()),
+                    TokenTy::BangEqual => Ok((!Self::is_equal(left, right)).into()),
                     _ => unreachable!(),
                 }
             }

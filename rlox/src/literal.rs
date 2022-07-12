@@ -1,7 +1,9 @@
+use std::borrow::Cow;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(f64),
-    String(String),
+    String(Cow<'static, str>),
     Boolean(bool),
     Nil,
 }
@@ -14,7 +16,7 @@ impl From<f64> for Literal {
 
 impl From<String> for Literal {
     fn from(s: String) -> Self {
-        Self::String(s)
+        Self::String(s.into())
     }
 }
 

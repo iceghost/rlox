@@ -181,7 +181,7 @@ impl Scanner {
         // trim
         let value = &self.source.as_bytes()[self.start + 1..self.current - 1];
         let value = String::from_utf8_lossy(value).into_owned();
-        self.add_literal(TokenTy::String, Literal::String(value));
+        self.add_literal(TokenTy::String, Literal::String(value.into()));
     }
 
     fn peek(&self) -> char {
