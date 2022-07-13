@@ -1,11 +1,6 @@
 use crate::{
-    environment::{Environment, EnvironmentPointer},
-    expr::Expr,
-    literal::Literal,
-    object::Object,
-    stmt::Stmt,
-    token::Token,
-    token_type::TokenTy,
+    environment::EnvironmentPointer, expr::Expr, literal::Literal, object::Object, stmt::Stmt,
+    token::Token, token_type::TokenTy,
 };
 
 #[derive(Default)]
@@ -33,12 +28,10 @@ impl<'a> Interpreter<'a> {
                 let value = initializer
                     .as_ref()
                     .map_or(Ok(().into()), |expr| self.evaluate(expr))?;
-                self.environment
-                    .borrow_mut()
-                    .define(name.lexeme.to_owned(), value);
+                self.environment.define(name.lexeme.to_owned(), value);
             }
             Stmt::Block(stmts) => {
-                self.execute_block(stmts, Environment::new(self.environment.clone()))?;
+                self.execute_block(stmts, EnvironmentPointer::new(self.environment.clone()))?;
             }
         }
         Ok(())
@@ -140,10 +133,10 @@ impl<'a> Interpreter<'a> {
                     _ => unreachable!(),
                 }
             }
-            Expr::Variable(name) => Ok(self.environment.borrow().get(name)?),
+            Expr::Variable(name) => Ok(self.environment.get(name)?),
             Expr::Assign { name, value } => {
                 let value = self.evaluate(value)?;
-                self.environment.borrow_mut().assign(name, value.clone())?;
+                self.environment.assign(name, value.clone())?;
                 Ok(value)
             }
         }
