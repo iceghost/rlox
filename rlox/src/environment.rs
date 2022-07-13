@@ -7,10 +7,10 @@ use std::{
 use crate::{interpreter::RuntimeError, object::Object, token::Token};
 
 #[derive(Debug, Default, Clone)]
-pub struct EnvironmentPointer<'a>(Rc<RefCell<Environment<'a>>>);
+pub struct EnvironmentPointer(Rc<RefCell<Environment>>);
 
-impl<'a> EnvironmentPointer<'a> {
-    pub fn new(enclosing: EnvironmentPointer<'a>) -> Self {
+impl EnvironmentPointer {
+    pub fn new(enclosing: EnvironmentPointer) -> Self {
         Self(Rc::new(RefCell::new(Environment::new(enclosing))))
     }
 
@@ -31,13 +31,13 @@ impl<'a> EnvironmentPointer<'a> {
 }
 
 #[derive(Debug, Default)]
-struct Environment<'a> {
-    enclosing: Option<EnvironmentPointer<'a>>,
+struct Environment {
+    enclosing: Option<EnvironmentPointer>,
     values: HashMap<String, Object>,
 }
 
-impl<'a> Environment<'a> {
-    pub fn new(enclosing: EnvironmentPointer<'a>) -> Self {
+impl Environment {
+    pub fn new(enclosing: EnvironmentPointer) -> Self {
         Self {
             enclosing: Some(enclosing),
             ..Default::default()

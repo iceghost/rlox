@@ -10,6 +10,9 @@ mod environment;
 mod expr;
 mod interpreter;
 mod literal;
+mod lox_callable;
+mod lox_function;
+mod native_functions;
 mod object;
 mod parser;
 mod scanner;
@@ -32,13 +35,13 @@ fn main() {
 }
 
 #[derive(Default)]
-struct Lox<'intpr> {
+struct Lox {
     had_input_error: bool,
     had_runtime_error: bool,
-    interpreter: Interpreter<'intpr>,
+    interpreter: Interpreter,
 }
 
-impl<'intpr> Lox<'intpr> {
+impl Lox {
     fn run_file(&mut self, path: String) {
         let program =
             std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("failed to open {}", path));
@@ -135,6 +138,7 @@ impl<'intpr> Lox<'intpr> {
             RuntimeError::Custom(token, message) => {
                 eprintln!("{message}\n[line {}]", token.line);
             }
+            RuntimeError::Return(_) => unreachable!(),
         }
         self.had_runtime_error = true;
     }

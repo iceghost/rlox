@@ -1,21 +1,39 @@
+use std::rc::Rc;
+
 use crate::{
-    environment::EnvironmentPointer, expr::Expr, literal::Literal, object::Object, stmt::Stmt,
-    token::Token, token_type::TokenTy,
+    environment::EnvironmentPointer, expr::Expr, literal::Literal, lox_function::LoxFunction,
+    native_functions, object::Object, stmt::Stmt, token::Token, token_type::TokenTy,
 };
 
-#[derive(Default)]
-pub struct Interpreter<'a> {
-    environment: EnvironmentPointer<'a>,
+pub struct Interpreter {
+    #[allow(dead_code)]
+    pub globals: EnvironmentPointer,
+    pub environment: EnvironmentPointer,
 }
 
-impl<'a> Interpreter<'a> {
+impl Default for Interpreter {
+    fn default() -> Self {
+        let mut globals = EnvironmentPointer::default();
+        globals.define(
+            "clock".into(),
+            Object::from_callable(native_functions::Clock),
+        );
+        let environment = globals.clone();
+        Self {
+            globals,
+            environment,
+        }
+    }
+}
+
+impl Interpreter {
     pub fn interpret(&mut self, statements: &Vec<Stmt>) -> Result<()> {
         for statement in statements {
             self.execute(statement)?;
         }
         Ok(())
     }
-    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
             Stmt::Expression(expr) => {
                 self.evaluate(expr)?;
@@ -33,11 +51,35 @@ impl<'a> Interpreter<'a> {
             Stmt::Block(stmts) => {
                 self.execute_block(stmts, EnvironmentPointer::new(self.environment.clone()))?;
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                if Self::is_truthy(&self.evaluate(condition)?) {
+                    self.execute(then_branch)?;
+                } else if let Some(else_branch) = else_branch {
+                    self.execute(else_branch)?;
+                }
+            }
+            Stmt::While { condition, body } => {
+                while Self::is_truthy(&self.evaluate(condition)?) {
+                    self.execute(body)?;
+                }
+            }
+            Stmt::Function(stmt) => {
+                let function = LoxFunction::new(Rc::clone(stmt), self.environment.clone());
+                self.environment
+                    .define(stmt.name.lexeme.to_owned(), Object::from_callable(function));
+            }
+            Stmt::Return { value, .. } => {
+                return Err(RuntimeError::Return(self.evaluate(value)?));
+            }
         }
         Ok(())
     }
 
-    fn execute_block(&mut self, statements: &[Stmt], env: EnvironmentPointer<'a>) -> Result<()> {
+    pub fn execute_block(&mut self, statements: &[Stmt], env: EnvironmentPointer) -> Result<()> {
         let previous = self.environment.clone();
         self.environment = env;
 
@@ -139,6 +181,56 @@ impl<'a> Interpreter<'a> {
                 self.environment.assign(name, value.clone())?;
                 Ok(value)
             }
+            Expr::Logical {
+                left,
+                operator,
+                right,
+            } => {
+                let left = self.evaluate(left)?;
+
+                if operator.ty == TokenTy::Or {
+                    if Self::is_truthy(&left) {
+                        return Ok(left);
+                    }
+                } else if !Self::is_truthy(&left) {
+                    return Ok(left);
+                }
+
+                self.evaluate(right)
+            }
+            Expr::Call {
+                callee,
+                paren,
+                arguments,
+            } => {
+                let callee = self.evaluate(callee)?;
+
+                let arguments = arguments
+                    .iter()
+                    .map(|arg| self.evaluate(arg))
+                    .collect::<Result<Vec<_>>>()?;
+
+                if let Object::Callable(function) = callee {
+                    if arguments.len() == function.arity() {
+                        Ok(function.call(self, arguments)?)
+                    } else {
+                        Err(RuntimeError::Custom(
+                            paren.clone(),
+                            format!(
+                                "Expected {} arguments but got {}.",
+                                function.arity(),
+                                arguments.len()
+                            )
+                            .into(),
+                        ))
+                    }
+                } else {
+                    Err(RuntimeError::Custom(
+                        paren.clone(),
+                        "Can only call functions and methods.".into(),
+                    ))
+                }
+            }
         }
     }
 
@@ -185,5 +277,7 @@ impl<'a> Interpreter<'a> {
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
 pub enum RuntimeError {
+    // a hack
+    Return(Object),
     Custom(Token, std::borrow::Cow<'static, str>),
 }
