@@ -2,6 +2,7 @@ use std::{borrow::Cow, io::BufRead, process::exit};
 
 use interpreter::{Interpreter, RuntimeError};
 use parser::{ParseError, Parser};
+use resolver::{ResolveError, Resolver};
 use scanner::{ScanError, Scanner};
 use token_type::TokenTy;
 
@@ -15,6 +16,7 @@ mod lox_function;
 mod native_functions;
 mod object;
 mod parser;
+mod resolver;
 mod scanner;
 mod stmt;
 mod token;
@@ -90,6 +92,12 @@ impl Lox {
             }
         };
 
+        let resolver = Resolver::new(&mut self.interpreter);
+        if let Err(err) = resolver.resolve(&statements) {
+            self.had_input_error = true;
+            return self.resolve_error(err);
+        }
+
         match self.interpreter.interpret(&statements) {
             Ok(_) => {}
             Err(err) => {
@@ -141,6 +149,27 @@ impl Lox {
             RuntimeError::Return(_) => unreachable!(),
         }
         self.had_runtime_error = true;
+    }
+
+    fn resolve_error(&mut self, err: ResolveError) {
+        match err {
+            ResolveError::Custom(token, message) => {
+                if token.ty == TokenTy::Eof {
+                    self.report(token.line, " at end".into(), message);
+                } else {
+                    self.report(
+                        token.line,
+                        format!(" at '{}'", token.lexeme).into(),
+                        message,
+                    );
+                }
+            }
+            ResolveError::Multiple(errs) => {
+                for err in errs {
+                    self.resolve_error(err);
+                }
+            }
+        }
     }
 
     fn report(&mut self, line: usize, location: Cow<'_, str>, message: Cow<'_, str>) {

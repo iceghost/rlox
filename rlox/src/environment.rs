@@ -25,8 +25,23 @@ impl EnvironmentPointer {
     }
 
     #[inline]
-    pub fn assign(&self, name: &Token, value: Object) -> Result<(), RuntimeError> {
+    pub fn assign(&mut self, name: &Token, value: Object) -> Result<(), RuntimeError> {
         self.0.borrow_mut().assign(name, value)
+    }
+
+    #[inline]
+    pub fn get_at(&self, distance: usize, name: &Token) -> Result<Object, RuntimeError> {
+        self.0.borrow().get_at(distance, name)
+    }
+
+    #[inline]
+    pub fn assign_at(
+        &mut self,
+        distance: usize,
+        name: &Token,
+        value: Object,
+    ) -> Result<(), RuntimeError> {
+        self.0.borrow_mut().assign_at(distance, name, value)
     }
 }
 
@@ -77,6 +92,32 @@ impl Environment {
                     ))
                 }
             }
+        }
+    }
+
+    pub fn get_at(&self, distance: usize, name: &Token) -> Result<Object, RuntimeError> {
+        if distance == 0 {
+            Ok(self.values.get(&name.lexeme).unwrap().clone())
+        } else if let Some(enclosing) = &self.enclosing {
+            enclosing.get_at(distance - 1, name)
+        } else {
+            panic!("ancestor too far")
+        }
+    }
+
+    pub fn assign_at(
+        &mut self,
+        distance: usize,
+        name: &Token,
+        value: Object,
+    ) -> Result<(), RuntimeError> {
+        if distance == 0 {
+            self.values.insert(name.lexeme.to_owned(), value);
+            Ok(())
+        } else if let Some(enclosing) = &mut self.enclosing {
+            enclosing.assign_at(distance - 1, name, value)
+        } else {
+            panic!("ancestor too far")
         }
     }
 }

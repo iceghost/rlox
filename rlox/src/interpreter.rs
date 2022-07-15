@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     environment::EnvironmentPointer, expr::Expr, literal::Literal, lox_function::LoxFunction,
@@ -8,6 +8,7 @@ use crate::{
 pub struct Interpreter {
     #[allow(dead_code)]
     pub globals: EnvironmentPointer,
+    locals: HashMap<*const Expr, usize>,
     pub environment: EnvironmentPointer,
 }
 
@@ -22,12 +23,13 @@ impl Default for Interpreter {
         Self {
             globals,
             environment,
+            locals: Default::default(),
         }
     }
 }
 
 impl Interpreter {
-    pub fn interpret(&mut self, statements: &Vec<Stmt>) -> Result<()> {
+    pub fn interpret(&mut self, statements: &[Stmt]) -> Result<()> {
         for statement in statements {
             self.execute(statement)?;
         }
@@ -77,6 +79,10 @@ impl Interpreter {
             }
         }
         Ok(())
+    }
+
+    pub fn resolve(&mut self, expr: &Expr, depth: usize) {
+        self.locals.insert(expr as *const Expr, depth);
     }
 
     pub fn execute_block(&mut self, statements: &[Stmt], env: EnvironmentPointer) -> Result<()> {
@@ -175,10 +181,18 @@ impl Interpreter {
                     _ => unreachable!(),
                 }
             }
-            Expr::Variable(name) => Ok(self.environment.get(name)?),
+            Expr::Variable(name) => self.look_up_variable(name, expr),
             Expr::Assign { name, value } => {
                 let value = self.evaluate(value)?;
-                self.environment.assign(name, value.clone())?;
+
+                match self.locals.get(&(expr as *const _)) {
+                    Some(&distance) => {
+                        self.environment.assign_at(distance, name, value.clone())?;
+                    }
+                    None => {
+                        self.globals.assign(name, value.clone())?;
+                    }
+                }
                 Ok(value)
             }
             Expr::Logical {
@@ -231,6 +245,13 @@ impl Interpreter {
                     ))
                 }
             }
+        }
+    }
+
+    fn look_up_variable(&self, name: &Token, expr: &Expr) -> Result<Object> {
+        match self.locals.get(&(expr as *const Expr)) {
+            Some(&distance) => self.environment.get_at(distance, name),
+            None => self.globals.get(name),
         }
     }
 
