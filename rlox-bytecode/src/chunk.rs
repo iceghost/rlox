@@ -6,6 +6,11 @@ use crate::value::{Value, Values};
 #[repr(u8)]
 pub enum Opcode {
     Constant,
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Negate,
     Return,
 }
 
@@ -22,8 +27,8 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: Value) -> u8 {
-        self.constants.write(value);
+    pub fn add_constant(&mut self, value: impl Into<Value>) -> u8 {
+        self.constants.write(value.into());
         self.constants.len() as u8 - 1
     }
 
