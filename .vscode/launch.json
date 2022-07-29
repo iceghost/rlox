@@ -7,34 +7,71 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'rlox'",
+            "name": "Debug executable 'rlox-treewalk'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=rlox",
-                    "--package=rlox"
+                    "--bin=rlox-treewalk",
+                    "--package=rlox-treewalk"
                 ],
                 "filter": {
-                    "name": "rlox",
+                    "name": "rlox-treewalk",
                     "kind": "bin"
                 }
             },
-            "args": ["tests/calc.lox"],
+            "args": [],
             "cwd": "${workspaceFolder}"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'rlox'",
+            "name": "Debug unit tests in executable 'rlox-treewalk'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=rlox",
-                    "--package=rlox"
+                    "--bin=rlox-treewalk",
+                    "--package=rlox-treewalk"
                 ],
                 "filter": {
-                    "name": "rlox",
+                    "name": "rlox-treewalk",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rlox-bytecode'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=rlox-bytecode",
+                    "--package=rlox-bytecode"
+                ],
+                "filter": {
+                    "name": "rlox-bytecode",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'rlox-bytecode'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=rlox-bytecode",
+                    "--package=rlox-bytecode"
+                ],
+                "filter": {
+                    "name": "rlox-bytecode",
                     "kind": "bin"
                 }
             },

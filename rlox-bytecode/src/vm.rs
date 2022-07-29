@@ -12,16 +12,22 @@ pub struct VM<'a> {
     stack: Vec<Value>,
 }
 
+impl<'a> Default for VM<'a> {
+    fn default() -> Self {
+        todo!()
+    }
+}
+
 impl<'a> VM<'a> {
-    fn new(chunk: &'a Chunk) -> Self {
-        let ip = chunk.code().iter();
-        let stack = Vec::new();
-        Self { chunk, ip, stack }
+    pub fn new(chunk: &'a Chunk) -> Self {
+        // let ip = chunk.code().iter();
+        // let stack = Vec::new();
+        // Self { chunk, ip, stack }
+        todo!()
     }
 
-    pub fn intepret(chunk: &'a Chunk) -> Result<(), InterpretError> {
-        let mut vm = Self::new(chunk);
-        vm.run()
+    pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
+        todo!()
     }
 
     #[inline]
