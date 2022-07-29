@@ -1,0 +1,10 @@
+[package]
+name = "rlox-treewalk"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+phf = { version = "0.10.1", features = ["macros"] }
+thiserror = "1.0.31"

@@ -130,7 +130,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "rlox"
+name = "rlox-bytecode"
+version = "0.1.0"
+
+[[package]]
+name = "rlox-treewalk"
 version = "0.1.0"
 dependencies = [
  "phf",
