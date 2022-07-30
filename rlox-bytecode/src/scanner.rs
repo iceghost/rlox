@@ -1,4 +1,4 @@
-use std::str::CharIndices;
+use std::{borrow::Borrow, str::CharIndices};
 
 use itertools::{Itertools, MultiPeek};
 
@@ -37,14 +37,14 @@ impl<'a> Scanner<'a> {
         offset
     }
 
-    fn make_token(&mut self, ty: Ty) -> Token {
+    fn make_token(&mut self, ty: Ty) -> Token<'a> {
         let offset = self.offset();
         let lexeme = &self.source[self.start..offset];
         self.start = offset;
         Token::new(ty, lexeme, self.line)
     }
 
-    fn error_token(&self, message: &'static str) -> Token {
+    fn error_token(&self, message: &'static str) -> Token<'static> {
         let ty = Ty::Error;
         let lexeme = message;
         Token::new(ty, lexeme, self.line)
@@ -103,7 +103,7 @@ impl<'a> Scanner<'a> {
         self.current.reset_peek();
     }
 
-    fn string(&mut self) -> Token {
+    fn string(&mut self) -> Token<'a> {
         while !matches!(self.peek(), Some('"') | None) {
             if let Some('\n') = self.advance() {
                 self.line += 1;
@@ -121,7 +121,7 @@ impl<'a> Scanner<'a> {
         matches!(self.peek(), Some(c) if c.is_ascii_digit())
     }
 
-    fn number(&mut self) -> Token {
+    fn number(&mut self) -> Token<'a> {
         while self.peek_is_digit() {
             self.advance();
         }
@@ -181,7 +181,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn identifier(&mut self) -> Token {
+    fn identifier(&mut self) -> Token<'a> {
         while matches!(self.peek(), Some(c) if c.is_ascii_alphanumeric()) {
             self.advance();
         }
@@ -190,7 +190,7 @@ impl<'a> Scanner<'a> {
         self.make_token(ty)
     }
 
-    pub fn scan_token(&mut self) -> Token {
+    pub fn scan_token(&mut self) -> Token<'a> {
         self.skip_whitespace();
         self.start = self.offset();
         match self.advance() {

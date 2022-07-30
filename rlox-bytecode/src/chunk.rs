@@ -27,9 +27,9 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: impl Into<Value>) -> u8 {
+    pub fn add_constant(&mut self, value: impl Into<Value>) -> usize {
         self.constants.write(value.into());
-        self.constants.len() as u8 - 1
+        self.constants.len() - 1
     }
 
     pub fn code(&self) -> &[u8] {

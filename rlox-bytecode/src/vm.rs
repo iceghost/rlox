@@ -1,43 +1,23 @@
+use std::slice;
+
 use num_traits::FromPrimitive;
 
 use crate::{
     chunk::{Chunk, Opcode},
+    compiler,
     debug::disassemble_instruction,
     value::Value,
 };
 
-pub struct VM<'a> {
+struct ChunkIter<'a> {
     chunk: &'a Chunk,
-    ip: std::slice::Iter<'a, u8>,
-    stack: Vec<Value>,
+    ip: slice::Iter<'a, u8>,
 }
 
-impl<'a> Default for VM<'a> {
-    fn default() -> Self {
-        todo!()
-    }
-}
-
-impl<'a> VM<'a> {
-    pub fn new(chunk: &'a Chunk) -> Self {
-        // let ip = chunk.code().iter();
-        // let stack = Vec::new();
-        // Self { chunk, ip, stack }
-        todo!()
-    }
-
-    pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
-        todo!()
-    }
-
+impl<'a> ChunkIter<'a> {
     #[inline]
-    pub fn push(&mut self, value: Value) {
-        self.stack.push(value);
-    }
-
-    #[inline]
-    pub fn pop(&mut self) -> Value {
-        self.stack.pop().unwrap()
+    fn new(chunk: &'a Chunk, ip: slice::Iter<'a, u8>) -> Self {
+        Self { chunk, ip }
     }
 
     #[inline]
@@ -50,7 +30,53 @@ impl<'a> VM<'a> {
         self.chunk.constants()[self.read_byte() as usize]
     }
 
-    fn run(&mut self) -> Result<(), InterpretError> {
+    #[inline]
+    fn as_inner(&self) -> &Chunk {
+        self.chunk
+    }
+
+    #[inline]
+    fn offset(&self) -> usize {
+        self.chunk.code().len() - self.ip.len()
+    }
+}
+
+#[derive(Default)]
+pub struct VM {
+    stack: Vec<Value>,
+}
+
+impl VM {
+    pub fn new() -> Self {
+        let stack = Vec::new();
+        Self { stack }
+    }
+
+    pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
+        todo!();
+        // let chunk = if let Some(chunk) = compiler::compile(source) {
+        //     chunk
+        // } else {
+        //     return Err(InterpretError::Compile);
+        // };
+
+        // let ip = chunk.code().iter();
+
+        // let chunk_iter = ChunkIter::new(&chunk, ip);
+        // self.run(chunk_iter)
+    }
+
+    #[inline]
+    fn push(&mut self, value: Value) {
+        self.stack.push(value);
+    }
+
+    #[inline]
+    fn pop(&mut self) -> Value {
+        self.stack.pop().unwrap()
+    }
+
+    fn run(&mut self, mut iter: ChunkIter) -> Result<(), InterpretError> {
         macro_rules! binary_op {
             ($op:tt) => {{
                 let a = self.pop();
@@ -66,12 +92,12 @@ impl<'a> VM<'a> {
                     eprint!("[ {value} ]")
                 }
                 eprintln!();
-                disassemble_instruction(self.chunk, self.chunk.code().len() - self.ip.len());
+                disassemble_instruction(iter.as_inner(), iter.offset());
             }
 
-            match Opcode::from_u8(self.read_byte()) {
+            match Opcode::from_u8(iter.read_byte()) {
                 Some(Opcode::Constant) => {
-                    let constant = self.read_constant();
+                    let constant = iter.read_constant();
                     self.push(constant);
                 }
                 Some(Opcode::Add) => binary_op!(+),
