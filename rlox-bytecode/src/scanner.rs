@@ -161,7 +161,7 @@ impl<'a> Scanner<'a> {
                 if self.offset() - self.start > 1 {
                     match self.source.as_bytes()[self.start + 1] {
                         b'h' => return self.check_keyword(2, b"is", Ty::This),
-                        b'r' => return self.check_keyword(2, b"ur", Ty::True),
+                        b'r' => return self.check_keyword(2, b"ue", Ty::True),
                         _ => {}
                     }
                 }
