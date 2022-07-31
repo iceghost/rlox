@@ -28,10 +28,9 @@ fn main() {
 fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-    // let mut vm = VM::default();
+    let mut vm = VM::default();
     loop {
         let mut line: String = String::new();
-        let mut compiler = Compiler::default();
         print!("> ");
         stdout.flush().unwrap();
         match stdin.read_line(&mut line) {
@@ -40,7 +39,7 @@ fn repl() {
                 break;
             }
             Ok(_) => {
-                compiler.compile(&line);
+                vm.intepret(&line).unwrap();
             }
         }
     }

@@ -1,105 +1,18 @@
-use std::mem::MaybeUninit;
-
 use crate::{
     chunk::{Chunk, Opcode},
     debug,
     scanner::{
-        token::{self, Token, Ty},
+        token::{self, Ty},
         Scanner,
     },
     value::Value,
 };
 
-pub struct Parser<'a> {
-    current: MaybeUninit<Token<'a>>,
-    previous: MaybeUninit<Token<'a>>,
-    had_error: bool,
-    panic_mode: bool,
-}
-
-impl<'a> Default for Parser<'a> {
-    fn default() -> Self {
-        let current = MaybeUninit::uninit();
-        let previous = MaybeUninit::uninit();
-        let had_error = false;
-        let panic_mode = false;
-        Self {
-            current,
-            previous,
-            had_error,
-            panic_mode,
-        }
-    }
-}
-
-impl<'a> Parser<'a> {
-    #[inline]
-    fn previous(&self) -> Token<'a> {
-        unsafe { self.previous.assume_init() }
-    }
-
-    #[inline]
-    fn current(&self) -> Token<'a> {
-        unsafe { self.current.assume_init() }
-    }
-
-    fn advance(&mut self, scanner: &mut Scanner<'a>) {
-        let next_token = loop {
-            let token = scanner.scan_token();
-            if token.ty() != Ty::Error {
-                break token;
-            };
-            self.error_at_current(token.lexeme());
-        };
-        // Token implemented Copy so we don't need this
-        // unsafe { self.previous.assume_init_drop() };
-        self.previous = std::mem::replace(&mut self.current, MaybeUninit::new(next_token));
-    }
-
-    fn consume(&mut self, scanner: &mut Scanner<'a>, ty: Ty, message: &str) {
-        if self.current().ty() != ty {
-            self.error_at_current(message);
-            return;
-        }
-
-        self.advance(scanner);
-    }
-
-    #[inline]
-    fn error_at_current(&mut self, message: &str) {
-        self.error_at(self.current(), message);
-    }
-
-    #[inline]
-    fn error(&mut self, message: &str) {
-        self.error_at(self.previous(), message);
-    }
-
-    fn error_at(&mut self, token: Token, message: &str) {
-        if self.panic_mode {
-            return;
-        }
-        self.panic_mode = true;
-
-        eprint!("[line {}] Error", token.line());
-
-        if token.ty() == Ty::Eof {
-            eprint!(" at end");
-        } else if token.ty() == Ty::Error {
-            // nothing
-        } else {
-            eprint!("at '{}'", token.lexeme());
-        }
-
-        eprintln!(": {message}");
-
-        self.had_error = true;
-    }
-}
+mod parser;
 
 #[derive(Default)]
 pub struct Compiler<'a> {
-    parser: Parser<'a>,
+    parser: parser::Parser<'a>,
     compiling_chunk: Chunk,
 }
 
@@ -112,12 +25,12 @@ impl<'a> Compiler<'a> {
         self.parser
             .consume(&mut scanner, Ty::Eof, "Expect end of expression.");
 
-        !self.parser.had_error
+        !self.parser.had_error()
     }
 
     fn end(&mut self) {
         self.emit_bytes([Opcode::Return as u8]);
-        if !self.parser.had_error {
+        if !self.parser.had_error() {
             debug::disassemble_chunk(self.current_chunk_mut(), "code");
         }
     }
@@ -128,6 +41,12 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(scanner, rule.precedence.successor());
 
         match operator {
+            Ty::BangEqual => self.emit_bytes([Opcode::Equal as u8, Opcode::Not as u8]),
+            Ty::EqualEqual => self.emit_bytes([Opcode::Equal as u8]),
+            Ty::Greater => self.emit_bytes([Opcode::Greater as u8]),
+            Ty::GreaterEqual => self.emit_bytes([Opcode::Less as u8, Opcode::Not as u8]),
+            Ty::Less => self.emit_bytes([Opcode::Less as u8]),
+            Ty::LessEqual => self.emit_bytes([Opcode::Greater as u8, Opcode::Not as u8]),
             Ty::Plus => self.emit_bytes([Opcode::Add as u8]),
             Ty::Minus => self.emit_bytes([Opcode::Subtract as u8]),
             Ty::Star => self.emit_bytes([Opcode::Multiply as u8]),
@@ -149,6 +68,16 @@ impl<'a> Compiler<'a> {
 
         match operator {
             Ty::Minus => self.emit_bytes([Opcode::Negate as u8]),
+            Ty::Bang => self.emit_bytes([Opcode::Not as u8]),
+            _ => unreachable!(),
+        }
+    }
+
+    fn literal(&mut self, scanner: &mut Scanner<'a>) {
+        match self.parser.previous().ty() {
+            Ty::Nil => self.emit_bytes([Opcode::Nil as u8]),
+            Ty::True => self.emit_bytes([Opcode::True as u8]),
+            Ty::False => self.emit_bytes([Opcode::False as u8]),
             _ => unreachable!(),
         }
     }
@@ -199,6 +128,12 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    #[inline]
+    pub fn current_chunk(&self) -> &Chunk {
+        &self.compiling_chunk
+    }
+
+    #[inline]
     fn current_chunk_mut(&mut self) -> &mut Chunk {
         &mut self.compiling_chunk
     }
@@ -275,31 +210,31 @@ fn get_rule<'a>(operator: Ty) -> ParseRule<'a> {
         Ty::Semicolon    => (None,                     None,                   Precedence::None),
         Ty::Slash        => (None,                     Some(Compiler::binary), Precedence::Factor),
         Ty::Star         => (None,                     Some(Compiler::binary), Precedence::Factor),
-        Ty::Bang         => (None,                     None,                   Precedence::None),
-        Ty::BangEqual    => (None,                     None,                   Precedence::None),
+        Ty::Bang         => (Some(Compiler::unary),    None,                   Precedence::None),
+        Ty::BangEqual    => (None,                     Some(Compiler::binary), Precedence::Equality),
         Ty::Equal        => (None,                     None,                   Precedence::None),
-        Ty::EqualEqual   => (None,                     None,                   Precedence::None),
-        Ty::Greater      => (None,                     None,                   Precedence::None),
-        Ty::GreaterEqual => (None,                     None,                   Precedence::None),
-        Ty::Less         => (None,                     None,                   Precedence::None),
-        Ty::LessEqual    => (None,                     None,                   Precedence::None),
+        Ty::EqualEqual   => (None,                     Some(Compiler::binary), Precedence::Equality),
+        Ty::Greater      => (None,                     Some(Compiler::binary), Precedence::Comparison),
+        Ty::GreaterEqual => (None,                     Some(Compiler::binary), Precedence::Comparison),
+        Ty::Less         => (None,                     Some(Compiler::binary), Precedence::Comparison),
+        Ty::LessEqual    => (None,                     Some(Compiler::binary), Precedence::Comparison),
         Ty::Identifier   => (None,                     None,                   Precedence::None),
         Ty::String       => (None,                     None,                   Precedence::None),
         Ty::Number       => (Some(Compiler::number),   None,                   Precedence::None),
         Ty::And          => (None,                     None,                   Precedence::None),
         Ty::Class        => (None,                     None,                   Precedence::None),
         Ty::Else         => (None,                     None,                   Precedence::None),
-        Ty::False        => (None,                     None,                   Precedence::None),
+        Ty::False        => (Some(Compiler::literal),  None,                   Precedence::None),
         Ty::For          => (None,                     None,                   Precedence::None),
         Ty::Fun          => (None,                     None,                   Precedence::None),
         Ty::If           => (None,                     None,                   Precedence::None),
-        Ty::Nil          => (None,                     None,                   Precedence::None),
+        Ty::Nil          => (Some(Compiler::literal),  None,                   Precedence::None),
         Ty::Or           => (None,                     None,                   Precedence::None),
         Ty::Print        => (None,                     None,                   Precedence::None),
         Ty::Return       => (None,                     None,                   Precedence::None),
         Ty::Super        => (None,                     None,                   Precedence::None),
         Ty::This         => (None,                     None,                   Precedence::None),
-        Ty::True         => (None,                     None,                   Precedence::None),
+        Ty::True         => (Some(Compiler::literal),  None,                   Precedence::None),
         Ty::Var          => (None,                     None,                   Precedence::None),
         Ty::While        => (None,                     None,                   Precedence::None),
         Ty::Error        => (None,                     None,                   Precedence::None),

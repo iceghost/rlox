@@ -6,10 +6,17 @@ use crate::value::{Value, Values};
 #[repr(u8)]
 pub enum Opcode {
     Constant,
+    Nil,
+    True,
+    False,
+    Equal,
+    Greater,
+    Less,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Not,
     Negate,
     Return,
 }

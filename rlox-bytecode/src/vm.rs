@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 
 use crate::{
     chunk::{Chunk, Opcode},
-    compiler,
+    compiler::{self, Compiler},
     debug::disassemble_instruction,
     value::Value,
 };
@@ -53,22 +53,22 @@ impl VM {
     }
 
     pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
-        todo!();
-        // let chunk = if let Some(chunk) = compiler::compile(source) {
-        //     chunk
-        // } else {
-        //     return Err(InterpretError::Compile);
-        // };
+        let mut compiler = Compiler::default();
 
-        // let ip = chunk.code().iter();
+        if !compiler.compile(source) {
+            return Err(InterpretError::Compile);
+        };
 
-        // let chunk_iter = ChunkIter::new(&chunk, ip);
-        // self.run(chunk_iter)
+        let chunk = compiler.current_chunk();
+        let ip = chunk.code().iter();
+
+        let chunk_iter = ChunkIter::new(&chunk, ip);
+        self.run(chunk_iter)
     }
 
     #[inline]
-    fn push(&mut self, value: Value) {
-        self.stack.push(value);
+    fn push(&mut self, value: impl Into<Value>) {
+        self.stack.push(value.into());
     }
 
     #[inline]
@@ -76,12 +76,26 @@ impl VM {
         self.stack.pop().unwrap()
     }
 
+    #[inline]
+    fn peek(&self, distance: usize) -> &Value {
+        &self.stack[self.stack.len() - 1 - distance]
+    }
+
     fn run(&mut self, mut iter: ChunkIter) -> Result<(), InterpretError> {
         macro_rules! binary_op {
             ($op:tt) => {{
-                let a = self.pop();
-                let b = self.pop();
-                self.push(a $op b);
+                let a = self.peek(0);
+                let b = self.peek(1);
+                match (a.as_double(), b.as_double()) {
+                    (Some(a), Some(b)) => {
+                        self.pop();
+                        self.pop();
+                        self.push(a $op b);
+                    }
+                    _ => {
+                        self.runtime_error(&iter, "Operands must be numbers.");
+                    }
+                }
             }};
         }
 
@@ -100,13 +114,33 @@ impl VM {
                     let constant = iter.read_constant();
                     self.push(constant);
                 }
+                Some(Opcode::Not) => {
+                    let result = !self.pop().is_truthy();
+                    self.push(result);
+                }
+                Some(Opcode::Nil) => self.push(()),
+                Some(Opcode::True) => self.push(true),
+                Some(Opcode::False) => self.push(false),
+                Some(Opcode::Equal) => {
+                    let a = self.pop();
+                    let b = self.pop();
+                    self.push(a == b);
+                }
+                Some(Opcode::Greater) => binary_op!(>),
+                Some(Opcode::Less) => binary_op!(<),
                 Some(Opcode::Add) => binary_op!(+),
                 Some(Opcode::Subtract) => binary_op!(-),
                 Some(Opcode::Multiply) => binary_op!(*),
                 Some(Opcode::Divide) => binary_op!(/),
                 Some(Opcode::Negate) => {
-                    let value = -self.pop();
-                    self.push(value);
+                    if let Some(number) = self.peek(0).as_double() {
+                        self.pop();
+                        let value = -number;
+                        self.push(value);
+                    } else {
+                        self.runtime_error(&iter, "Operand must be a number.");
+                        return Err(InterpretError::Runtime);
+                    }
                 }
                 Some(Opcode::Return) => {
                     eprintln!("{}", self.pop());
@@ -115,6 +149,13 @@ impl VM {
                 None => return Err(InterpretError::Runtime),
             }
         }
+    }
+
+    fn runtime_error(&mut self, iter: &ChunkIter, message: &str) {
+        eprintln!("{message}");
+        let line = iter.offset();
+        eprintln!("[line {line}] in script");
+        self.stack.clear();
     }
 }
 
