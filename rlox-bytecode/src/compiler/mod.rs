@@ -2,7 +2,7 @@ use crate::{
     chunk::{Chunk, Opcode},
     debug,
     scanner::{
-        token::{self, Ty},
+        token::{Ty},
         Scanner,
     },
     value::Value,
@@ -73,7 +73,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn literal(&mut self, scanner: &mut Scanner<'a>) {
+    fn literal(&mut self, _: &mut Scanner<'a>) {
         match self.parser.previous().ty() {
             Ty::Nil => self.emit_bytes([Opcode::Nil as u8]),
             Ty::True => self.emit_bytes([Opcode::True as u8]),

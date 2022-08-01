@@ -4,7 +4,7 @@ use num_traits::FromPrimitive;
 
 use crate::{
     chunk::{Chunk, Opcode},
-    compiler::{self, Compiler},
+    compiler::{Compiler},
     debug::disassemble_instruction,
     value::Value,
 };
@@ -47,11 +47,6 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new() -> Self {
-        let stack = Vec::new();
-        Self { stack }
-    }
-
     pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
         let mut compiler = Compiler::default();
 
@@ -62,7 +57,7 @@ impl VM {
         let chunk = compiler.current_chunk();
         let ip = chunk.code().iter();
 
-        let chunk_iter = ChunkIter::new(&chunk, ip);
+        let chunk_iter = ChunkIter::new(chunk, ip);
         self.run(chunk_iter)
     }
 

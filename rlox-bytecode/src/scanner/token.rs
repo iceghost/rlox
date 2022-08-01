@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 #[derive(Clone, Copy)]
 pub struct Token<'a> {
     ty: Ty,

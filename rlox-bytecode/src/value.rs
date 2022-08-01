@@ -1,7 +1,4 @@
-use std::{
-    fmt::Display,
-    ops::{Add, Deref, Div, Mul, Neg, Sub},
-};
+use std::{fmt::Display, ops::Deref};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Value {
@@ -10,6 +7,7 @@ pub enum Value {
     Nil,
 }
 
+#[allow(unused)]
 impl Value {
     pub fn as_double(self) -> Option<f64> {
         if let Self::Double(v) = self {
@@ -72,46 +70,6 @@ impl From<()> for Value {
         Self::Nil
     }
 }
-
-// impl Add for Value {
-//     type Output = Self;
-//     fn add(self, rhs: Self) -> Self::Output {
-//         let output = self.0 + rhs.0;
-//         output.into()
-//     }
-// }
-
-// impl Sub for Value {
-//     type Output = Self;
-//     fn sub(self, rhs: Self) -> Self::Output {
-//         let output = self.0 - rhs.0;
-//         output.into()
-//     }
-// }
-
-// impl Mul for Value {
-//     type Output = Self;
-//     fn mul(self, rhs: Self) -> Self::Output {
-//         let output = self.0 * rhs.0;
-//         output.into()
-//     }
-// }
-
-// impl Div for Value {
-//     type Output = Self;
-//     fn div(self, rhs: Self) -> Self::Output {
-//         let output = self.0 / rhs.0;
-//         output.into()
-//     }
-// }
-
-// impl Neg for Value {
-//     type Output = Self;
-//     fn neg(self) -> Self::Output {
-//         let output = -self.0;
-//         output.into()
-//     }
-// }
 
 #[derive(Default)]
 pub struct Values(Vec<Value>);

@@ -3,7 +3,6 @@ use std::{
     process::exit,
 };
 
-use compiler::Compiler;
 use vm::{InterpretError, VM};
 
 mod chunk;
@@ -39,7 +38,7 @@ fn repl() {
                 break;
             }
             Ok(_) => {
-                vm.intepret(&line).unwrap();
+                let _ = vm.intepret(&line);
             }
         }
     }
@@ -51,7 +50,6 @@ fn run_file(path: &str) {
         eprintln!("Error: {e:#?}");
         exit(74);
     });
-    // compiler::compile(&source);
     let mut vm = VM::default();
     let result = vm.intepret(&source);
     match result {

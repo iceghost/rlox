@@ -95,6 +95,7 @@ impl<'a> Parser<'a> {
         self.had_error
     }
 
+    #[allow(unused)]
     pub fn panic_mode(&self) -> bool {
         self.panic_mode
     }
