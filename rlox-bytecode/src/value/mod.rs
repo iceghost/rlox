@@ -1,10 +1,24 @@
 use std::{fmt::Display, ops::Deref};
 
+pub use self::object::Object;
+
+mod object;
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Value {
     Bool(bool),
     Double(f64),
     Nil,
+    // there is two requirements:
+    // - should have the size of a pointer;
+    // - should have some ways to disambiguate between object types
+    String(Object<String>),
+}
+
+impl From<Object<String>> for Value {
+    fn from(s: Object<String>) -> Self {
+        Self::String(s)
+    }
 }
 
 #[allow(unused)]
@@ -38,6 +52,14 @@ impl Value {
             _ => true,
         }
     }
+
+    pub fn as_string(&self) -> Option<&str> {
+        if let Self::String(v) = self {
+            Some(&*v)
+        } else {
+            None
+        }
+    }
 }
 
 impl Display for Value {
@@ -46,6 +68,7 @@ impl Display for Value {
             Value::Bool(b) => b.fmt(f),
             Value::Double(d) => d.fmt(f),
             Value::Nil => "nil".fmt(f),
+            Value::String(s) => s.fmt(f),
         }
     }
 }

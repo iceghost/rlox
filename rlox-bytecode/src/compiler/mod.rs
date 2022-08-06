@@ -1,11 +1,9 @@
 use crate::{
     chunk::{Chunk, Opcode},
     debug,
-    scanner::{
-        token::{Ty},
-        Scanner,
-    },
+    scanner::{token::Ty, Scanner},
     value::Value,
+    vm::VM,
 };
 
 mod parser;
@@ -17,10 +15,10 @@ pub struct Compiler<'a> {
 }
 
 impl<'a> Compiler<'a> {
-    pub fn compile(&mut self, source: &'a str) -> bool {
+    pub fn compile(&mut self, source: &'a str, vm: &mut VM) -> bool {
         let mut scanner = Scanner::new(source);
         self.parser.advance(&mut scanner);
-        self.expression(&mut scanner);
+        self.expression(&mut scanner, vm);
         self.end();
         self.parser
             .consume(&mut scanner, Ty::Eof, "Expect end of expression.");
@@ -35,10 +33,10 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn binary(&mut self, scanner: &mut Scanner<'a>) {
+    fn binary(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
         let operator = self.parser.previous().ty();
         let rule = get_rule(operator);
-        self.parse_precedence(scanner, rule.precedence.successor());
+        self.parse_precedence(scanner, vm, rule.precedence.successor());
 
         match operator {
             Ty::BangEqual => self.emit_bytes([Opcode::Equal as u8, Opcode::Not as u8]),
@@ -55,16 +53,16 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn grouping(&mut self, scanner: &mut Scanner<'a>) {
-        self.expression(scanner);
+    fn grouping(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
+        self.expression(scanner, vm);
         self.parser
             .consume(scanner, Ty::RightParen, "Expect ')' after expression.");
     }
 
-    fn unary(&mut self, scanner: &mut Scanner<'a>) {
+    fn unary(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
         let operator = self.parser.previous().ty();
 
-        self.parse_precedence(scanner, Precedence::Unary);
+        self.parse_precedence(scanner, vm, Precedence::Unary);
 
         match operator {
             Ty::Minus => self.emit_bytes([Opcode::Negate as u8]),
@@ -73,7 +71,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn literal(&mut self, _: &mut Scanner<'a>) {
+    fn literal(&mut self, _: &mut Scanner<'a>, _: &mut VM) {
         match self.parser.previous().ty() {
             Ty::Nil => self.emit_bytes([Opcode::Nil as u8]),
             Ty::True => self.emit_bytes([Opcode::True as u8]),
@@ -82,11 +80,11 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn expression(&mut self, scanner: &mut Scanner<'a>) {
-        self.parse_precedence(scanner, Precedence::Assignment);
+    fn expression(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
+        self.parse_precedence(scanner, vm, Precedence::Assignment);
     }
 
-    fn parse_precedence(&mut self, scanner: &mut Scanner<'a>, prec: Precedence) {
+    fn parse_precedence(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM, prec: Precedence) {
         self.parser.advance(scanner);
         let prefix_rule = get_rule(self.parser.previous().ty()).prefix;
         let prefix_rule = if let Some(prefix_rule) = prefix_rule {
@@ -96,18 +94,26 @@ impl<'a> Compiler<'a> {
             return;
         };
 
-        prefix_rule(self, scanner);
+        prefix_rule(self, scanner, vm);
 
         while prec <= get_rule(self.parser.current().ty()).precedence {
             self.parser.advance(scanner);
             let infix_rule = get_rule(self.parser.previous().ty()).infix.unwrap();
-            infix_rule(self, scanner);
+            infix_rule(self, scanner, vm);
         }
     }
 
-    fn number(&mut self, _: &mut Scanner<'a>) {
+    fn number(&mut self, _: &mut Scanner<'a>, _: &mut VM) {
         let value = self.parser.previous().lexeme().parse::<f64>().unwrap();
         self.emit_constant(value);
+    }
+
+    fn string(&mut self, _: &mut Scanner<'a>, vm: &mut VM) {
+        let token = self.parser.previous();
+        let lexeme = token.lexeme();
+        let copied_str = (&lexeme[1..lexeme.len() - 1]).to_owned();
+        let obj = vm.allocate(copied_str);
+        self.emit_constant(obj);
     }
 
     fn emit_constant(&mut self, value: impl Into<Value>) {
@@ -173,7 +179,7 @@ impl Precedence {
     }
 }
 
-type ParseFn<'a> = for<'r, 's> fn(&'r mut Compiler<'a>, &'s mut Scanner<'a>);
+type ParseFn<'a> = fn(&mut Compiler<'a>, &mut Scanner<'a>, &mut VM);
 
 struct ParseRule<'a> {
     prefix: Option<ParseFn<'a>>,
@@ -219,7 +225,7 @@ fn get_rule<'a>(operator: Ty) -> ParseRule<'a> {
         Ty::Less         => (None,                     Some(Compiler::binary), Precedence::Comparison),
         Ty::LessEqual    => (None,                     Some(Compiler::binary), Precedence::Comparison),
         Ty::Identifier   => (None,                     None,                   Precedence::None),
-        Ty::String       => (None,                     None,                   Precedence::None),
+        Ty::String       => (Some(Compiler::string),   None,                   Precedence::None),
         Ty::Number       => (Some(Compiler::number),   None,                   Precedence::None),
         Ty::And          => (None,                     None,                   Precedence::None),
         Ty::Class        => (None,                     None,                   Precedence::None),

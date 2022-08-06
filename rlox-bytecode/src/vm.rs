@@ -1,12 +1,12 @@
-use std::slice;
+use std::{any::Any, slice};
 
 use num_traits::FromPrimitive;
 
 use crate::{
     chunk::{Chunk, Opcode},
-    compiler::{Compiler},
+    compiler::Compiler,
     debug::disassemble_instruction,
-    value::Value,
+    value::{Object, Value},
 };
 
 struct ChunkIter<'a> {
@@ -44,13 +44,14 @@ impl<'a> ChunkIter<'a> {
 #[derive(Default)]
 pub struct VM {
     stack: Vec<Value>,
+    object: Option<Object<dyn Any>>,
 }
 
 impl VM {
     pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
         let mut compiler = Compiler::default();
 
-        if !compiler.compile(source) {
+        if !compiler.compile(source, self) {
             return Err(InterpretError::Compile);
         };
 
@@ -74,6 +75,13 @@ impl VM {
     #[inline]
     fn peek(&self, distance: usize) -> &Value {
         &self.stack[self.stack.len() - 1 - distance]
+    }
+
+    pub fn allocate<T: 'static>(&mut self, data: T) -> Object<T> {
+        let mut obj = Object::new(data);
+        obj.set_next(self.object);
+        self.object = Some(obj.into());
+        obj
     }
 
     fn run(&mut self, mut iter: ChunkIter) -> Result<(), InterpretError> {
@@ -123,7 +131,23 @@ impl VM {
                 }
                 Some(Opcode::Greater) => binary_op!(>),
                 Some(Opcode::Less) => binary_op!(<),
-                Some(Opcode::Add) => binary_op!(+),
+                Some(Opcode::Add) => {
+                    let a = self.peek(1);
+                    let b = self.peek(0);
+                    if let (Some(a), Some(b)) = (a.as_string(), b.as_string()) {
+                        let concatenated = [a, b].join("");
+                        let obj = self.allocate(concatenated);
+                        self.pop();
+                        self.pop();
+                        self.push(obj);
+                    } else if let (Some(a), Some(b)) = (a.as_double(), b.as_double()) {
+                        self.pop();
+                        self.pop();
+                        self.push(a + b);
+                    } else {
+                        self.runtime_error(&iter, "Operands must be numbers.");
+                    }
+                }
                 Some(Opcode::Subtract) => binary_op!(-),
                 Some(Opcode::Multiply) => binary_op!(*),
                 Some(Opcode::Divide) => binary_op!(/),
@@ -151,6 +175,16 @@ impl VM {
         let line = iter.offset();
         eprintln!("[line {line}] in script");
         self.stack.clear();
+    }
+}
+
+impl Drop for VM {
+    fn drop(&mut self) {
+        let mut maybe_obj = self.object;
+        while let Some(obj) = maybe_obj {
+            maybe_obj = obj.next();
+            obj.drop_inner();
+        }
     }
 }
 
