@@ -1,7 +1,5 @@
 use crate::chunk::{Chunk, Opcode};
 
-use num_traits::FromPrimitive;
-
 pub fn disassemble_chunk(chunk: &Chunk, name: &str) {
 	eprintln!("== {name} ==");
 
@@ -20,22 +18,22 @@ pub fn disassemble_instruction(chunk: &Chunk, offset: usize) -> usize {
 		eprint!("{:4} ", chunk.lines()[offset])
 	}
 
-	match Opcode::from_u8(chunk.code()[offset]) {
-		Some(Opcode::Constant) => constant_instruction("OP_CONSTANT", chunk, offset),
-		Some(Opcode::Nil) => simple_instruction("OP_NIL", offset),
-		Some(Opcode::True) => simple_instruction("OP_TRUE", offset),
-		Some(Opcode::False) => simple_instruction("OP_FALSE", offset),
-		Some(Opcode::Equal) => simple_instruction("OP_EQUAL", offset),
-		Some(Opcode::Greater) => simple_instruction("OP_GREATER", offset),
-		Some(Opcode::Less) => simple_instruction("OP_LESS", offset),
-		Some(Opcode::Add) => simple_instruction("OP_ADD", offset),
-		Some(Opcode::Subtract) => simple_instruction("OP_SUBTRACT", offset),
-		Some(Opcode::Multiply) => simple_instruction("OP_MULTIPLY", offset),
-		Some(Opcode::Divide) => simple_instruction("OP_DIVIDE", offset),
-		Some(Opcode::Not) => simple_instruction("OP_NOT", offset),
-		Some(Opcode::Negate) => simple_instruction("OP_NEGATE", offset),
-		Some(Opcode::Return) => simple_instruction("OP_RETURN", offset),
-		None => {
+	match Opcode::try_from(chunk.code()[offset]) {
+		Ok(Opcode::Constant) => constant_instruction("OP_CONSTANT", chunk, offset),
+		Ok(Opcode::Nil) => simple_instruction("OP_NIL", offset),
+		Ok(Opcode::True) => simple_instruction("OP_TRUE", offset),
+		Ok(Opcode::False) => simple_instruction("OP_FALSE", offset),
+		Ok(Opcode::Equal) => simple_instruction("OP_EQUAL", offset),
+		Ok(Opcode::Greater) => simple_instruction("OP_GREATER", offset),
+		Ok(Opcode::Less) => simple_instruction("OP_LESS", offset),
+		Ok(Opcode::Add) => simple_instruction("OP_ADD", offset),
+		Ok(Opcode::Subtract) => simple_instruction("OP_SUBTRACT", offset),
+		Ok(Opcode::Multiply) => simple_instruction("OP_MULTIPLY", offset),
+		Ok(Opcode::Divide) => simple_instruction("OP_DIVIDE", offset),
+		Ok(Opcode::Not) => simple_instruction("OP_NOT", offset),
+		Ok(Opcode::Negate) => simple_instruction("OP_NEGATE", offset),
+		Ok(Opcode::Return) => simple_instruction("OP_RETURN", offset),
+		Err(()) => {
 			eprintln!("Unknown opcode {}", chunk.code()[offset]);
 			offset + 1
 		}
