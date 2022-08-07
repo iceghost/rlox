@@ -1,4 +1,4 @@
-use std::{str::CharIndices};
+use std::str::CharIndices;
 
 use itertools::{Itertools, MultiPeek};
 

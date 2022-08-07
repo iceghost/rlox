@@ -112,7 +112,7 @@ impl<'a> Compiler<'a> {
         let token = self.parser.previous();
         let lexeme = token.lexeme();
         let copied_str = (&lexeme[1..lexeme.len() - 1]).to_owned();
-        let obj = vm.allocate(copied_str);
+        let obj = vm.allocate_string(copied_str);
         self.emit_constant(obj);
     }
 

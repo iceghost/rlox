@@ -6,7 +6,8 @@ use crate::{
     chunk::{Chunk, Opcode},
     compiler::Compiler,
     debug::disassemble_instruction,
-    value::{Object, Value},
+    table::Table,
+    value::{ObjString, Object, Value},
 };
 
 struct ChunkIter<'a> {
@@ -45,6 +46,7 @@ impl<'a> ChunkIter<'a> {
 pub struct VM {
     stack: Vec<Value>,
     object: Option<Object<dyn Any>>,
+    strings: Table<()>,
 }
 
 impl VM {
@@ -77,11 +79,17 @@ impl VM {
         &self.stack[self.stack.len() - 1 - distance]
     }
 
-    pub fn allocate<T: 'static>(&mut self, data: T) -> Object<T> {
-        let mut obj = Object::new(data);
-        obj.set_next(self.object);
-        self.object = Some(obj.into());
-        obj
+    pub fn allocate_string(&mut self, data: String) -> ObjString {
+        match self.strings.keys().find(|&&obj| *obj == *data) {
+            Some(&obj) => obj,
+            None => {
+                let mut obj: ObjString = Object::new(data.into());
+                obj.set_next(self.object);
+                self.object = Some(obj.into());
+                self.strings.insert(obj, ());
+                obj
+            }
+        }
     }
 
     fn run(&mut self, mut iter: ChunkIter) -> Result<(), InterpretError> {
@@ -136,7 +144,7 @@ impl VM {
                     let b = self.peek(0);
                     if let (Some(a), Some(b)) = (a.as_string(), b.as_string()) {
                         let concatenated = [a, b].join("");
-                        let obj = self.allocate(concatenated);
+                        let obj = self.allocate_string(concatenated);
                         self.pop();
                         self.pop();
                         self.push(obj);

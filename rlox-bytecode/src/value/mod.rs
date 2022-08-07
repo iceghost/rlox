@@ -1,8 +1,12 @@
 use std::{fmt::Display, ops::Deref};
 
-pub use self::object::Object;
-
 mod object;
+mod string;
+
+pub use self::object::Object;
+use self::string::HashedString;
+
+pub type ObjString = Object<HashedString>;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Value {
@@ -12,11 +16,11 @@ pub enum Value {
     // there is two requirements:
     // - should have the size of a pointer;
     // - should have some ways to disambiguate between object types
-    String(Object<String>),
+    String(ObjString),
 }
 
-impl From<Object<String>> for Value {
-    fn from(s: Object<String>) -> Self {
+impl From<ObjString> for Value {
+    fn from(s: ObjString) -> Self {
         Self::String(s)
     }
 }

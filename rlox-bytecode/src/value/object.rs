@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::ptr::NonNull;
 
 #[repr(transparent)]
@@ -25,6 +26,12 @@ impl<T: ?Sized> std::ops::Deref for Object<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { &self.0.as_ref().data }
+    }
+}
+
+impl<T: Hash> Hash for Object<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        unsafe { self.0.as_ref().data.hash(state) }
     }
 }
 
@@ -56,11 +63,13 @@ impl<T: ?Sized> Object<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for Object<T> {
+impl<T: ?Sized> PartialEq for Object<T> {
     fn eq(&self, other: &Self) -> bool {
-        unsafe { self.0.as_ref().data == other.0.as_ref().data }
+        self.0 == other.0
     }
 }
+
+impl<T: ?Sized> Eq for Object<T> {}
 
 impl<T: Display> Display for Object<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
