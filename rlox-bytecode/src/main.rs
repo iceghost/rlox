@@ -1,6 +1,6 @@
 use std::{
-    io::{self, Write},
-    process::exit,
+	io::{self, Write},
+	process::exit,
 };
 
 use vm::{InterpretError, VM};
@@ -14,48 +14,48 @@ mod value;
 mod vm;
 
 fn main() {
-    let mut args = std::env::args();
-    if args.len() == 1 {
-        repl();
-    } else if args.len() == 2 {
-        run_file(&args.nth(1).unwrap());
-    } else {
-        eprintln!("Usage: clox [path]");
-        exit(64);
-    }
+	let mut args = std::env::args();
+	if args.len() == 1 {
+		repl();
+	} else if args.len() == 2 {
+		run_file(&args.nth(1).unwrap());
+	} else {
+		eprintln!("Usage: clox [path]");
+		exit(64);
+	}
 }
 
 fn repl() {
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut vm = VM::default();
-    loop {
-        let mut line: String = String::new();
-        print!("> ");
-        stdout.flush().unwrap();
-        match stdin.read_line(&mut line) {
-            Ok(0) | Err(_) => {
-                println!();
-                break;
-            }
-            Ok(_) => {
-                let _ = vm.intepret(&line);
-            }
-        }
-    }
+	let stdin = io::stdin();
+	let mut stdout = io::stdout();
+	let mut vm = VM::default();
+	loop {
+		let mut line: String = String::new();
+		print!("> ");
+		stdout.flush().unwrap();
+		match stdin.read_line(&mut line) {
+			Ok(0) | Err(_) => {
+				println!();
+				break;
+			}
+			Ok(_) => {
+				let _ = vm.intepret(&line);
+			}
+		}
+	}
 }
 
 fn run_file(path: &str) {
-    let source = std::fs::read_to_string(path).unwrap_or_else(|e| {
-        eprintln!("Could not open file \"{path}\".");
-        eprintln!("Error: {e:#?}");
-        exit(74);
-    });
-    let mut vm = VM::default();
-    let result = vm.intepret(&source);
-    match result {
-        Ok(_) => (),
-        Err(InterpretError::Compile) => exit(65),
-        Err(InterpretError::Runtime) => exit(70),
-    }
+	let source = std::fs::read_to_string(path).unwrap_or_else(|e| {
+		eprintln!("Could not open file \"{path}\".");
+		eprintln!("Error: {e:#?}");
+		exit(74);
+	});
+	let mut vm = VM::default();
+	let result = vm.intepret(&source);
+	match result {
+		Ok(_) => (),
+		Err(InterpretError::Compile) => exit(65),
+		Err(InterpretError::Runtime) => exit(70),
+	}
 }
