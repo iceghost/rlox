@@ -1,7 +1,5 @@
 use std::{any::Any, slice};
 
-use num_traits::FromPrimitive;
-
 use crate::{
     chunk::{Chunk, Opcode},
     compiler::Compiler,
@@ -120,26 +118,26 @@ impl VM {
                 disassemble_instruction(iter.as_inner(), iter.offset());
             }
 
-            match Opcode::from_u8(iter.read_byte()) {
-                Some(Opcode::Constant) => {
+            match Opcode::try_from(iter.read_byte()) {
+                Ok(Opcode::Constant) => {
                     let constant = iter.read_constant();
                     self.push(constant);
                 }
-                Some(Opcode::Not) => {
+                Ok(Opcode::Not) => {
                     let result = !self.pop().is_truthy();
                     self.push(result);
                 }
-                Some(Opcode::Nil) => self.push(()),
-                Some(Opcode::True) => self.push(true),
-                Some(Opcode::False) => self.push(false),
-                Some(Opcode::Equal) => {
+                Ok(Opcode::Nil) => self.push(()),
+                Ok(Opcode::True) => self.push(true),
+                Ok(Opcode::False) => self.push(false),
+                Ok(Opcode::Equal) => {
                     let a = self.pop();
                     let b = self.pop();
                     self.push(a == b);
                 }
-                Some(Opcode::Greater) => binary_op!(>),
-                Some(Opcode::Less) => binary_op!(<),
-                Some(Opcode::Add) => {
+                Ok(Opcode::Greater) => binary_op!(>),
+                Ok(Opcode::Less) => binary_op!(<),
+                Ok(Opcode::Add) => {
                     let a = self.peek(1);
                     let b = self.peek(0);
                     if let (Some(a), Some(b)) = (a.as_string(), b.as_string()) {
@@ -156,10 +154,10 @@ impl VM {
                         self.runtime_error(&iter, "Operands must be numbers.");
                     }
                 }
-                Some(Opcode::Subtract) => binary_op!(-),
-                Some(Opcode::Multiply) => binary_op!(*),
-                Some(Opcode::Divide) => binary_op!(/),
-                Some(Opcode::Negate) => {
+                Ok(Opcode::Subtract) => binary_op!(-),
+                Ok(Opcode::Multiply) => binary_op!(*),
+                Ok(Opcode::Divide) => binary_op!(/),
+                Ok(Opcode::Negate) => {
                     if let Some(number) = self.peek(0).as_double() {
                         self.pop();
                         let value = -number;
@@ -169,11 +167,11 @@ impl VM {
                         return Err(InterpretError::Runtime);
                     }
                 }
-                Some(Opcode::Return) => {
+                Ok(Opcode::Return) => {
                     eprintln!("{}", self.pop());
                     return Ok(());
                 }
-                None => return Err(InterpretError::Runtime),
+                Err(()) => return Err(InterpretError::Runtime),
             }
         }
     }

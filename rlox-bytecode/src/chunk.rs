@@ -1,4 +1,5 @@
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 use crate::value::{Value, Values};
 
@@ -21,6 +22,17 @@ pub enum Opcode {
     Return,
 }
 
+impl TryFrom<u8> for Opcode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match Opcode::from_u8(value) {
+            Some(opcode) => Ok(opcode),
+            None => Err(()),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Chunk {
     code: Vec<u8>,
@@ -39,14 +51,17 @@ impl Chunk {
         self.constants.len() - 1
     }
 
+    #[inline]
     pub fn code(&self) -> &[u8] {
         self.code.as_ref()
     }
 
+    #[inline]
     pub fn constants(&self) -> &Values {
         &self.constants
     }
 
+    #[inline]
     pub fn lines(&self) -> &[usize] {
         self.lines.as_ref()
     }
