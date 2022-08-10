@@ -81,7 +81,7 @@ impl<'a> Compiler<'a> {
 
 	fn identifier_constant(&mut self, name: &str) -> u8 {
 		let obj = self.vm.allocate_string(name.to_owned());
-		self.current_chunk_mut().add_constant(obj)
+		self.make_constant(obj)
 	}
 
 	fn define_variable(&mut self, global: u8) {
@@ -208,14 +208,20 @@ impl<'a> Compiler<'a> {
 		}
 	}
 
-	fn emit_constant(&mut self, value: impl Into<Value>) {
+	fn make_constant(&mut self, value: impl Into<Value>) -> u8 {
 		let constant = self.current_chunk_mut().add_constant(value);
-		let constant = if let Ok(constant) = constant.try_into() {
-			constant
-		} else {
-			self.parser.error("Too many constants in one chunk.");
-			0
-		};
+
+		match constant.try_into() {
+			Ok(constant) => constant,
+			Err(_) => {
+				self.parser.error("Too many constants in one chunk.");
+				0
+			}
+		}
+	}
+
+	fn emit_constant(&mut self, value: impl Into<Value>) {
+		let constant = self.make_constant(value);
 		self.emit_bytes([Opcode::Constant as u8, constant]);
 	}
 
