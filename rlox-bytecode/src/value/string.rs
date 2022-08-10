@@ -1,4 +1,5 @@
 use std::{
+	fmt::Display,
 	hash::{BuildHasher, Hash, Hasher},
 	marker::PhantomData,
 	ops::Deref,
@@ -47,5 +48,11 @@ impl<B: BuildHasher + Default> PartialEq<str> for HashedString<B> {
 		let mut hasher = B::default().build_hasher();
 		other.hash(&mut hasher);
 		self.hash == (hasher.finish() as u32) && self.inner == other
+	}
+}
+
+impl Display for HashedString {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.inner.fmt(f)
 	}
 }

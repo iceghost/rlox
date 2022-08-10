@@ -30,6 +30,11 @@ impl<'a> ChunkIter<'a> {
 	}
 
 	#[inline]
+	fn read_string(&mut self) -> ObjString {
+		self.read_constant().as_objstring().unwrap()
+	}
+
+	#[inline]
 	fn as_inner(&self) -> &Chunk {
 		self.chunk
 	}
@@ -45,20 +50,22 @@ pub struct VM {
 	stack: Vec<Value>,
 	object: Option<Object<dyn Any>>,
 	strings: Table<()>,
+	globals: Table<Value>,
 }
 
 impl VM {
 	pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
-		let mut compiler = Compiler::default();
+		let mut compiler = Compiler::new(self);
 
-		if !compiler.compile(source, self) {
+		if !compiler.compile(source) {
 			return Err(InterpretError::Compile);
 		};
 
-		let chunk = compiler.current_chunk();
+		let chunk = compiler.into_chunk();
+		crate::debug::disassemble_chunk(&chunk, "test");
 		let ip = chunk.code().iter();
 
-		let chunk_iter = ChunkIter::new(chunk, ip);
+		let chunk_iter = ChunkIter::new(&chunk, ip);
 		self.run(chunk_iter)
 	}
 
@@ -111,6 +118,9 @@ impl VM {
 		loop {
 			if cfg!(debug_assertions) {
 				eprint!("          ");
+				if self.stack.is_empty() {
+					eprint!("<empty stack>");
+				}
 				for value in &self.stack {
 					eprint!("[ {value} ]")
 				}
@@ -130,6 +140,34 @@ impl VM {
 				Ok(Opcode::Nil) => self.push(()),
 				Ok(Opcode::True) => self.push(true),
 				Ok(Opcode::False) => self.push(false),
+				Ok(Opcode::Pop) => {
+					self.pop();
+				}
+				Ok(Opcode::GetGlobal) => {
+					let name = iter.read_string();
+					let value = if let Some(value) = self.globals.get(&name) {
+						*value
+					} else {
+						self.runtime_error(&iter, &format!("Undefined variable '{}'", name));
+						return Err(InterpretError::Runtime);
+					};
+					self.push(value);
+				}
+				Ok(Opcode::DefineGlobal) => {
+					let name = iter.read_string();
+					self.globals.insert(name, *self.peek(0));
+					self.pop();
+				}
+				Ok(Opcode::SetGlobal) => {
+					let name = iter.read_string();
+					let value = *self.peek(0);
+					if let Some(assignee) = self.globals.get_mut(&name) {
+						*assignee = value;
+					} else {
+						self.runtime_error(&iter, &format!("Undefined variable '{}'", name));
+						return Err(InterpretError::Runtime);
+					};
+				}
 				Ok(Opcode::Equal) => {
 					let a = self.pop();
 					let b = self.pop();
@@ -140,7 +178,7 @@ impl VM {
 				Ok(Opcode::Add) => {
 					let a = self.peek(1);
 					let b = self.peek(0);
-					if let (Some(a), Some(b)) = (a.as_string(), b.as_string()) {
+					if let (Some(a), Some(b)) = (a.as_str(), b.as_str()) {
 						let concatenated = [a, b].join("");
 						let obj = self.allocate_string(concatenated);
 						self.pop();
@@ -167,8 +205,10 @@ impl VM {
 						return Err(InterpretError::Runtime);
 					}
 				}
+				Ok(Opcode::Print) => {
+					println!("{}", self.pop());
+				}
 				Ok(Opcode::Return) => {
-					eprintln!("{}", self.pop());
 					return Ok(());
 				}
 				Err(()) => return Err(InterpretError::Runtime),

@@ -10,6 +10,10 @@ pub enum Opcode {
 	Nil,
 	True,
 	False,
+	Pop,
+	GetGlobal,
+	DefineGlobal,
+	SetGlobal,
 	Equal,
 	Greater,
 	Less,
@@ -19,6 +23,7 @@ pub enum Opcode {
 	Divide,
 	Not,
 	Negate,
+	Print,
 	Return,
 }
 
@@ -46,9 +51,9 @@ impl Chunk {
 		self.lines.push(line);
 	}
 
-	pub fn add_constant(&mut self, value: impl Into<Value>) -> usize {
+	pub fn add_constant(&mut self, value: impl Into<Value>) -> u8 {
 		self.constants.write(value.into());
-		self.constants.len() - 1
+		(self.constants.len() - 1) as u8
 	}
 
 	#[inline]

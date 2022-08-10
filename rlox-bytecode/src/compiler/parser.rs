@@ -38,6 +38,28 @@ impl<'a> Parser<'a> {
 		unsafe { self.current.assume_init() }
 	}
 
+	pub fn synchronize(&mut self, scanner: &mut Scanner<'a>) {
+		self.panic_mode = false;
+		while self.current().ty() != Ty::Eof {
+			if self.previous().ty() == Ty::Semicolon {
+				return;
+			}
+			match self.current().ty() {
+				Ty::Class
+				| Ty::Fun
+				| Ty::Var
+				| Ty::For
+				| Ty::If
+				| Ty::While
+				| Ty::Print
+				| Ty::Return => {
+					return;
+				}
+				_ => self.advance(scanner),
+			}
+		}
+	}
+
 	pub fn advance(&mut self, scanner: &mut Scanner<'a>) {
 		let next_token = loop {
 			let token = scanner.scan_token();
@@ -58,6 +80,18 @@ impl<'a> Parser<'a> {
 		}
 
 		self.advance(scanner);
+	}
+
+	fn check(&self, ty: Ty) -> bool {
+		self.current().ty() == ty
+	}
+
+	pub fn matches(&mut self, scanner: &mut Scanner<'a>, ty: Ty) -> bool {
+		if !self.check(ty) {
+			return false;
+		}
+		self.advance(scanner);
+		true
 	}
 
 	#[inline]

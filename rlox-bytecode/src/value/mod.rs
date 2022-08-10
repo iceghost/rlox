@@ -57,9 +57,17 @@ impl Value {
 		}
 	}
 
-	pub fn as_string(&self) -> Option<&str> {
+	pub fn as_str(&self) -> Option<&str> {
 		if let Self::String(v) = self {
 			Some(&*v)
+		} else {
+			None
+		}
+	}
+
+	pub fn as_objstring(&self) -> Option<ObjString> {
+		if let Self::String(obj) = self {
+			Some(*obj)
 		} else {
 			None
 		}

@@ -8,17 +8,31 @@ use crate::{
 
 mod parser;
 
-#[derive(Default)]
+use self::parser::Parser;
+
 pub struct Compiler<'a> {
-	parser: parser::Parser<'a>,
+	parser: Parser<'a>,
 	compiling_chunk: Chunk,
+	vm: &'a mut VM,
 }
 
 impl<'a> Compiler<'a> {
-	pub fn compile(&mut self, source: &'a str, vm: &mut VM) -> bool {
+	pub fn new(vm: &'a mut VM) -> Self {
+		let parser = Parser::default();
+		let compiling_chunk = Chunk::default();
+		Self {
+			parser,
+			compiling_chunk,
+			vm,
+		}
+	}
+
+	pub fn compile(&mut self, source: &'a str) -> bool {
 		let mut scanner = Scanner::new(source);
 		self.parser.advance(&mut scanner);
-		self.expression(&mut scanner, vm);
+		while !self.parser.matches(&mut scanner, Ty::Eof) {
+			self.declaration(&mut scanner);
+		}
 		self.end();
 		self.parser
 			.consume(&mut scanner, Ty::Eof, "Expect end of expression.");
@@ -28,15 +42,78 @@ impl<'a> Compiler<'a> {
 
 	fn end(&mut self) {
 		self.emit_bytes([Opcode::Return as u8]);
-		if !self.parser.had_error() {
+		if self.parser.had_error() {
 			debug::disassemble_chunk(self.current_chunk_mut(), "code");
 		}
 	}
 
-	fn binary(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
+	fn declaration(&mut self, scanner: &mut Scanner<'a>) {
+		if self.parser.matches(scanner, Ty::Var) {
+			self.var_declaration(scanner);
+		} else {
+			self.statement(scanner);
+		}
+
+		if self.parser.panic_mode() {
+			self.parser.synchronize(scanner);
+		}
+	}
+
+	fn var_declaration(&mut self, scanner: &mut Scanner<'a>) {
+		let global = self.parse_variable(scanner, "Expect variable name.");
+		if self.parser.matches(scanner, Ty::Equal) {
+			self.expression(scanner);
+		} else {
+			self.emit_bytes([Opcode::Nil as u8]);
+		};
+		self.parser.consume(
+			scanner,
+			Ty::Semicolon,
+			"Expect ';' after variable declaration.",
+		);
+		self.define_variable(global);
+	}
+
+	fn parse_variable(&mut self, scanner: &mut Scanner<'a>, error_message: &'static str) -> u8 {
+		self.parser.consume(scanner, Ty::Identifier, error_message);
+		self.identifier_constant(self.parser.previous().lexeme())
+	}
+
+	fn identifier_constant(&mut self, name: &str) -> u8 {
+		let obj = self.vm.allocate_string(name.to_owned());
+		self.current_chunk_mut().add_constant(obj)
+	}
+
+	fn define_variable(&mut self, global: u8) {
+		self.emit_bytes([Opcode::DefineGlobal as u8, global]);
+	}
+
+	fn statement(&mut self, scanner: &mut Scanner<'a>) {
+		if self.parser.matches(scanner, Ty::Print) {
+			self.print_statement(scanner);
+		} else {
+			self.expression_statement(scanner);
+		}
+	}
+
+	fn print_statement(&mut self, scanner: &mut Scanner<'a>) {
+		self.expression(scanner);
+		self.parser
+			.consume(scanner, Ty::Semicolon, "Expect ';' after value.");
+		self.emit_bytes([Opcode::Print as u8])
+	}
+
+	fn expression_statement(&mut self, scanner: &mut Scanner<'a>) {
+		self.expression(scanner);
+		self.parser
+			.consume(scanner, Ty::Semicolon, "Expect ';' after expression.");
+		self.emit_bytes([Opcode::Pop as u8])
+	}
+
+	fn binary(&mut self, scanner: &mut Scanner<'a>, _: bool) {
 		let operator = self.parser.previous().ty();
 		let rule = get_rule(operator);
-		self.parse_precedence(scanner, vm, rule.precedence.successor());
+		self.parse_precedence(scanner, rule.precedence.successor());
 
 		match operator {
 			Ty::BangEqual => self.emit_bytes([Opcode::Equal as u8, Opcode::Not as u8]),
@@ -53,16 +130,16 @@ impl<'a> Compiler<'a> {
 		}
 	}
 
-	fn grouping(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
-		self.expression(scanner, vm);
+	fn grouping(&mut self, scanner: &mut Scanner<'a>, _: bool) {
+		self.expression(scanner);
 		self.parser
 			.consume(scanner, Ty::RightParen, "Expect ')' after expression.");
 	}
 
-	fn unary(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
+	fn unary(&mut self, scanner: &mut Scanner<'a>, _: bool) {
 		let operator = self.parser.previous().ty();
 
-		self.parse_precedence(scanner, vm, Precedence::Unary);
+		self.parse_precedence(scanner, Precedence::Unary);
 
 		match operator {
 			Ty::Minus => self.emit_bytes([Opcode::Negate as u8]),
@@ -71,7 +148,7 @@ impl<'a> Compiler<'a> {
 		}
 	}
 
-	fn literal(&mut self, _: &mut Scanner<'a>, _: &mut VM) {
+	fn literal(&mut self, _: &mut Scanner<'a>, _: bool) {
 		match self.parser.previous().ty() {
 			Ty::Nil => self.emit_bytes([Opcode::Nil as u8]),
 			Ty::True => self.emit_bytes([Opcode::True as u8]),
@@ -80,11 +157,11 @@ impl<'a> Compiler<'a> {
 		}
 	}
 
-	fn expression(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM) {
-		self.parse_precedence(scanner, vm, Precedence::Assignment);
+	fn expression(&mut self, scanner: &mut Scanner<'a>) {
+		self.parse_precedence(scanner, Precedence::Assignment);
 	}
 
-	fn parse_precedence(&mut self, scanner: &mut Scanner<'a>, vm: &mut VM, prec: Precedence) {
+	fn parse_precedence(&mut self, scanner: &mut Scanner<'a>, prec: Precedence) {
 		self.parser.advance(scanner);
 		let prefix_rule = get_rule(self.parser.previous().ty()).prefix;
 		let prefix_rule = if let Some(prefix_rule) = prefix_rule {
@@ -94,26 +171,41 @@ impl<'a> Compiler<'a> {
 			return;
 		};
 
-		prefix_rule(self, scanner, vm);
+		let can_assign = prec <= Precedence::Assignment;
+		prefix_rule(self, scanner, can_assign);
 
 		while prec <= get_rule(self.parser.current().ty()).precedence {
 			self.parser.advance(scanner);
 			let infix_rule = get_rule(self.parser.previous().ty()).infix.unwrap();
-			infix_rule(self, scanner, vm);
+			infix_rule(self, scanner, can_assign);
 		}
 	}
 
-	fn number(&mut self, _: &mut Scanner<'a>, _: &mut VM) {
+	fn number(&mut self, _: &mut Scanner<'a>, _: bool) {
 		let value = self.parser.previous().lexeme().parse::<f64>().unwrap();
 		self.emit_constant(value);
 	}
 
-	fn string(&mut self, _: &mut Scanner<'a>, vm: &mut VM) {
+	fn string(&mut self, _: &mut Scanner<'a>, _: bool) {
 		let token = self.parser.previous();
 		let lexeme = token.lexeme();
 		let copied_str = (&lexeme[1..lexeme.len() - 1]).to_owned();
-		let obj = vm.allocate_string(copied_str);
+		let obj = self.vm.allocate_string(copied_str);
 		self.emit_constant(obj);
+	}
+
+	fn variable(&mut self, scanner: &mut Scanner<'a>, can_assign: bool) {
+		self.named_variable(scanner, self.parser.previous().lexeme(), can_assign);
+	}
+
+	fn named_variable(&mut self, scanner: &mut Scanner<'a>, name: &str, can_assign: bool) {
+		let arg = self.identifier_constant(name);
+		if can_assign && self.parser.matches(scanner, Ty::Equal) {
+			self.expression(scanner);
+			self.emit_bytes([Opcode::SetGlobal as u8, arg]);
+		} else {
+			self.emit_bytes([Opcode::GetGlobal as u8, arg]);
+		}
 	}
 
 	fn emit_constant(&mut self, value: impl Into<Value>) {
@@ -135,8 +227,8 @@ impl<'a> Compiler<'a> {
 	}
 
 	#[inline]
-	pub fn current_chunk(&self) -> &Chunk {
-		&self.compiling_chunk
+	pub fn into_chunk(self) -> Chunk {
+		self.compiling_chunk
 	}
 
 	#[inline]
@@ -179,7 +271,7 @@ impl Precedence {
 	}
 }
 
-type ParseFn<'a> = fn(&mut Compiler<'a>, &mut Scanner<'a>, &mut VM);
+type ParseFn<'a> = fn(&mut Compiler<'a>, &mut Scanner<'a>, bool);
 
 struct ParseRule<'a> {
 	prefix: Option<ParseFn<'a>>,
@@ -224,7 +316,7 @@ fn get_rule<'a>(operator: Ty) -> ParseRule<'a> {
         Ty::GreaterEqual => (None,                     Some(Compiler::binary), Precedence::Comparison),
         Ty::Less         => (None,                     Some(Compiler::binary), Precedence::Comparison),
         Ty::LessEqual    => (None,                     Some(Compiler::binary), Precedence::Comparison),
-        Ty::Identifier   => (None,                     None,                   Precedence::None),
+        Ty::Identifier   => (Some(Compiler::variable), None,                   Precedence::None),
         Ty::String       => (Some(Compiler::string),   None,                   Precedence::None),
         Ty::Number       => (Some(Compiler::number),   None,                   Precedence::None),
         Ty::And          => (None,                     None,                   Precedence::None),
