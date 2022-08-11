@@ -6,28 +6,32 @@ use crate::scanner::token::Token;
 use std::mem::MaybeUninit;
 
 pub struct Parser<'a> {
+	scanner: Scanner<'a>,
 	current: MaybeUninit<Token<'a>>,
 	previous: MaybeUninit<Token<'a>>,
 	had_error: bool,
 	panic_mode: bool,
 }
 
-impl<'a> Default for Parser<'a> {
-	fn default() -> Self {
+impl<'a> Parser<'a> {
+	pub fn new(source: &'a str) -> Self {
 		let current = MaybeUninit::uninit();
 		let previous = MaybeUninit::uninit();
 		let had_error = false;
 		let panic_mode = false;
-		Self {
+		let scanner = Scanner::new(source);
+		let mut parser = Self {
 			current,
 			previous,
 			had_error,
 			panic_mode,
-		}
+			scanner,
+		};
+		// prime the parser
+		parser.advance();
+		parser
 	}
-}
 
-impl<'a> Parser<'a> {
 	#[inline]
 	pub fn previous(&self) -> Token<'a> {
 		unsafe { self.previous.assume_init() }
@@ -38,7 +42,7 @@ impl<'a> Parser<'a> {
 		unsafe { self.current.assume_init() }
 	}
 
-	pub fn synchronize(&mut self, scanner: &mut Scanner<'a>) {
+	pub fn synchronize(&mut self) {
 		self.panic_mode = false;
 		while self.current().ty() != Ty::Eof {
 			if self.previous().ty() == Ty::Semicolon {
@@ -55,14 +59,14 @@ impl<'a> Parser<'a> {
 				| Ty::Return => {
 					return;
 				}
-				_ => self.advance(scanner),
+				_ => self.advance(),
 			}
 		}
 	}
 
-	pub fn advance(&mut self, scanner: &mut Scanner<'a>) {
+	pub fn advance(&mut self) {
 		let next_token = loop {
-			let token = scanner.scan_token();
+			let token = self.scanner.scan_token();
 			if token.ty() != Ty::Error {
 				break token;
 			};
@@ -73,24 +77,24 @@ impl<'a> Parser<'a> {
 		self.previous = std::mem::replace(&mut self.current, MaybeUninit::new(next_token));
 	}
 
-	pub fn consume(&mut self, scanner: &mut Scanner<'a>, ty: Ty, message: &str) {
+	pub fn consume(&mut self, ty: Ty, message: &str) {
 		if self.current().ty() != ty {
 			self.error_at_current(message);
 			return;
 		}
 
-		self.advance(scanner);
+		self.advance();
 	}
 
 	fn check(&self, ty: Ty) -> bool {
 		self.current().ty() == ty
 	}
 
-	pub fn matches(&mut self, scanner: &mut Scanner<'a>, ty: Ty) -> bool {
+	pub fn matches(&mut self, ty: Ty) -> bool {
 		if !self.check(ty) {
 			return false;
 		}
-		self.advance(scanner);
+		self.advance();
 		true
 	}
 

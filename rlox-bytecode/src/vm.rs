@@ -2,7 +2,7 @@ use std::{any::Any, slice};
 
 use crate::{
 	chunk::{Chunk, Opcode},
-	compiler::Compiler,
+	compiler::Compilation,
 	debug::disassemble_instruction,
 	table::Table,
 	value::{ObjString, Object, Value},
@@ -55,13 +55,13 @@ pub struct VM {
 
 impl VM {
 	pub fn intepret(&mut self, source: &str) -> Result<(), InterpretError> {
-		let mut compiler = Compiler::new(self);
+		let mut compilation = Compilation::new(self, source);
 
-		if !compiler.compile(source) {
+		if !compilation.execute() {
 			return Err(InterpretError::Compile);
 		};
 
-		let chunk = compiler.into_chunk();
+		let chunk = compilation.into_chunk();
 		crate::debug::disassemble_chunk(&chunk, "test");
 		let ip = chunk.code().iter();
 
