@@ -59,7 +59,7 @@ impl Value {
 
 	pub fn as_str(&self) -> Option<&str> {
 		if let Self::String(v) = self {
-			Some(&*v)
+			Some(v)
 		} else {
 			None
 		}

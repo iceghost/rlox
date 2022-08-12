@@ -1,7 +1,7 @@
 use crate::{
 	chunk::{Chunk, Opcode},
 	debug,
-	scanner::token::{Token, Ty},
+	scanner::token::Ty,
 	value::Value,
 	vm::VM,
 };
