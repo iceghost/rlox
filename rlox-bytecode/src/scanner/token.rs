@@ -14,7 +14,7 @@ impl<'a> Token<'a> {
 		self.line
 	}
 
-	pub fn lexeme(&self) -> &str {
+	pub fn lexeme(&self) -> &'a str {
 		self.lexeme
 	}
 

@@ -86,7 +86,7 @@ impl<'a> Parser<'a> {
 		self.advance();
 	}
 
-	fn check(&self, ty: Ty) -> bool {
+	pub fn check(&self, ty: Ty) -> bool {
 		self.current().ty() == ty
 	}
 

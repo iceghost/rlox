@@ -1,7 +1,7 @@
 use crate::{
 	chunk::{Chunk, Opcode},
 	debug,
-	scanner::token::Ty,
+	scanner::token::{Token, Ty},
 	value::Value,
 	vm::VM,
 };
@@ -10,8 +10,20 @@ mod parser;
 
 use self::parser::Parser;
 
+#[derive(Default)]
+struct Compiler<'a> {
+	locals: Vec<Local<'a>>,
+	scope_depth: u8,
+}
+
+struct Local<'a> {
+	name: &'a str,
+	depth: Option<u8>,
+}
+
 pub struct Compilation<'a> {
 	parser: Parser<'a>,
+	current: Compiler<'a>,
 	compiling_chunk: Chunk,
 	vm: &'a mut VM,
 }
@@ -20,7 +32,9 @@ impl<'a> Compilation<'a> {
 	pub fn new(vm: &'a mut VM, source: &'a str) -> Self {
 		let parser = Parser::new(source);
 		let compiling_chunk = Chunk::default();
+		let current = Compiler::default();
 		Self {
+			current,
 			parser,
 			compiling_chunk,
 			vm,
@@ -70,7 +84,37 @@ impl<'a> Compilation<'a> {
 
 	fn parse_variable(&mut self, error_message: &'static str) -> u8 {
 		self.parser.consume(Ty::Identifier, error_message);
-		self.identifier_constant(self.parser.previous().lexeme())
+		self.declare_variable();
+		if self.current.scope_depth > 0 {
+			0
+		} else {
+			self.identifier_constant(self.parser.previous().lexeme())
+		}
+	}
+
+	fn declare_variable(&mut self) {
+		if self.current.scope_depth == 0 {
+			return;
+		}
+		let name = self.parser.previous().lexeme();
+		for local in self.current.locals.iter().rev() {
+			if local.depth.is_some() && local.depth < Some(self.current.scope_depth) {
+				break;
+			}
+			if name == local.name {
+				self.parser
+					.error("Already a variable with this name in this scope.");
+			}
+		}
+		self.add_local(name);
+	}
+
+	fn add_local(&mut self, name: &'a str) {
+		if self.current.locals.len() == u8::MAX as usize {
+			self.parser.error("Too many local variables in function.");
+			return;
+		}
+		self.current.locals.push(Local { name, depth: None });
 	}
 
 	fn identifier_constant(&mut self, name: &str) -> u8 {
@@ -79,14 +123,50 @@ impl<'a> Compilation<'a> {
 	}
 
 	fn define_variable(&mut self, global: u8) {
+		if self.current.scope_depth > 0 {
+			self.mark_initialized();
+			return;
+		}
 		self.emit_bytes([Opcode::DefineGlobal as u8, global]);
+	}
+
+	fn mark_initialized(&mut self) {
+		let last = self.current.locals.last_mut().unwrap();
+		last.depth = Some(self.current.scope_depth);
 	}
 
 	fn statement(&mut self) {
 		if self.parser.matches(Ty::Print) {
 			self.print_statement();
+		} else if self.parser.matches(Ty::LeftBrace) {
+			self.begin_scope();
+			self.block();
+			self.end_scope();
 		} else {
 			self.expression_statement();
+		}
+	}
+
+	fn block(&mut self) {
+		while !self.parser.check(Ty::RightBrace) && !self.parser.check(Ty::Eof) {
+			self.declaration();
+		}
+		self.parser
+			.consume(Ty::RightBrace, "Expect '}' after block.");
+	}
+
+	fn begin_scope(&mut self) {
+		self.current.scope_depth += 1;
+	}
+
+	fn end_scope(&mut self) {
+		self.current.scope_depth -= 1;
+
+		while let Some(local) = self.current.locals.last() {
+			if local.depth > Some(self.current.scope_depth) {
+				self.emit_bytes([Opcode::Pop as u8]);
+				self.current.locals.pop();
+			}
 		}
 	}
 
@@ -192,14 +272,35 @@ impl<'a> Compilation<'a> {
 		self.named_variable(self.parser.previous().lexeme(), can_assign);
 	}
 
-	fn named_variable(&mut self, name: &str, can_assign: bool) {
-		let arg = self.identifier_constant(name);
+	fn named_variable(&mut self, name: &'a str, can_assign: bool) {
+		// let current = &self.current;
+		let (arg, get_op, set_op) = match self.resolve_local(name) {
+			None => (
+				self.identifier_constant(name),
+				Opcode::GetGlobal,
+				Opcode::SetGlobal,
+			),
+			Some(i) => (i as u8, Opcode::GetLocal, Opcode::SetLocal),
+		};
 		if can_assign && self.parser.matches(Ty::Equal) {
 			self.expression();
-			self.emit_bytes([Opcode::SetGlobal as u8, arg]);
+			self.emit_bytes([set_op as u8, arg]);
 		} else {
-			self.emit_bytes([Opcode::GetGlobal as u8, arg]);
+			self.emit_bytes([get_op as u8, arg]);
 		}
+	}
+
+	fn resolve_local(&mut self, name: &'a str) -> Option<u8> {
+		for (i, local) in self.current.locals.iter().enumerate().rev() {
+			if name == local.name {
+				if local.depth.is_none() {
+					self.parser
+						.error("Can't read local variable in its own initializer.");
+				}
+				return Some(i as u8);
+			}
+		}
+		None
 	}
 
 	fn make_constant(&mut self, value: impl Into<Value>) -> u8 {

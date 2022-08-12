@@ -80,8 +80,8 @@ impl VM {
 	}
 
 	#[inline]
-	fn peek(&self, distance: usize) -> &Value {
-		&self.stack[self.stack.len() - 1 - distance]
+	fn peek(&self, distance: usize) -> Value {
+		self.stack[self.stack.len() - 1 - distance]
 	}
 
 	pub fn allocate_string(&mut self, data: String) -> ObjString {
@@ -143,6 +143,10 @@ impl VM {
 				Ok(Opcode::Pop) => {
 					self.pop();
 				}
+				Ok(Opcode::GetLocal) => {
+					let slot = iter.read_byte();
+					self.push(self.stack[slot as usize]);
+				}
 				Ok(Opcode::GetGlobal) => {
 					let name = iter.read_string();
 					let value = if let Some(value) = self.globals.get(&name) {
@@ -155,12 +159,16 @@ impl VM {
 				}
 				Ok(Opcode::DefineGlobal) => {
 					let name = iter.read_string();
-					self.globals.insert(name, *self.peek(0));
+					self.globals.insert(name, self.peek(0));
 					self.pop();
+				}
+				Ok(Opcode::SetLocal) => {
+					let slot = iter.read_byte();
+					self.stack[slot as usize] = self.peek(0);
 				}
 				Ok(Opcode::SetGlobal) => {
 					let name = iter.read_string();
-					let value = *self.peek(0);
+					let value = self.peek(0);
 					if let Some(assignee) = self.globals.get_mut(&name) {
 						*assignee = value;
 					} else {
