@@ -1,4 +1,7 @@
-use std::{any::Any, slice};
+use std::{
+	any::Any,
+	io::{Cursor, Read, Seek, SeekFrom},
+};
 
 use crate::{
 	chunk::{Chunk, Opcode},
@@ -10,23 +13,32 @@ use crate::{
 
 struct ChunkIter<'a> {
 	chunk: &'a Chunk,
-	ip: slice::Iter<'a, u8>,
+	ip: Cursor<&'a [u8]>,
 }
 
 impl<'a> ChunkIter<'a> {
 	#[inline]
-	fn new(chunk: &'a Chunk, ip: slice::Iter<'a, u8>) -> Self {
+	fn new(chunk: &'a Chunk, ip: Cursor<&'a [u8]>) -> Self {
 		Self { chunk, ip }
 	}
 
 	#[inline]
-	fn read_byte(&mut self) -> u8 {
-		*self.ip.next().unwrap()
+	fn read_u8(&mut self) -> u8 {
+		let mut buf = [0];
+		self.ip.read_exact(&mut buf).unwrap();
+		buf[0]
+	}
+
+	#[inline]
+	fn read_u16(&mut self) -> u16 {
+		let head = self.read_u8() as u16;
+		let tail = self.read_u8() as u16;
+		(head << 8) | tail
 	}
 
 	#[inline]
 	fn read_constant(&mut self) -> Value {
-		self.chunk.constants()[self.read_byte() as usize]
+		self.chunk.constants()[self.read_u8() as usize]
 	}
 
 	#[inline]
@@ -41,7 +53,7 @@ impl<'a> ChunkIter<'a> {
 
 	#[inline]
 	fn offset(&self) -> usize {
-		self.chunk.code().len() - self.ip.len()
+		self.ip.position() as usize
 	}
 }
 
@@ -63,7 +75,7 @@ impl VM {
 
 		let chunk = compilation.into_chunk();
 		crate::debug::disassemble_chunk(&chunk, "test");
-		let ip = chunk.code().iter();
+		let ip = Cursor::new(chunk.code());
 
 		let chunk_iter = ChunkIter::new(&chunk, ip);
 		self.run(chunk_iter)
@@ -100,8 +112,8 @@ impl VM {
 	fn run(&mut self, mut iter: ChunkIter) -> Result<(), InterpretError> {
 		macro_rules! binary_op {
             ($op:tt) => {{
-                let a = self.peek(0);
-                let b = self.peek(1);
+                let a = self.peek(1);
+                let b = self.peek(0);
                 match (a.as_double(), b.as_double()) {
                     (Some(a), Some(b)) => {
                         self.pop();
@@ -128,7 +140,7 @@ impl VM {
 				disassemble_instruction(iter.as_inner(), iter.offset());
 			}
 
-			match Opcode::try_from(iter.read_byte()) {
+			match Opcode::try_from(iter.read_u8()) {
 				Ok(Opcode::Constant) => {
 					let constant = iter.read_constant();
 					self.push(constant);
@@ -144,7 +156,7 @@ impl VM {
 					self.pop();
 				}
 				Ok(Opcode::GetLocal) => {
-					let slot = iter.read_byte();
+					let slot = iter.read_u8();
 					self.push(self.stack[slot as usize]);
 				}
 				Ok(Opcode::GetGlobal) => {
@@ -163,7 +175,7 @@ impl VM {
 					self.pop();
 				}
 				Ok(Opcode::SetLocal) => {
-					let slot = iter.read_byte();
+					let slot = iter.read_u8();
 					self.stack[slot as usize] = self.peek(0);
 				}
 				Ok(Opcode::SetGlobal) => {
@@ -215,6 +227,20 @@ impl VM {
 				}
 				Ok(Opcode::Print) => {
 					println!("{}", self.pop());
+				}
+				Ok(Opcode::Jump) => {
+					let offset = iter.read_u16();
+					iter.ip.seek(SeekFrom::Current(offset as i64)).unwrap();
+				}
+				Ok(Opcode::JumpIfFalse) => {
+					let offset = iter.read_u16();
+					if !self.peek(0).is_truthy() {
+						iter.ip.seek(SeekFrom::Current(offset as i64)).unwrap();
+					}
+				}
+				Ok(Opcode::Loop) => {
+					let offset = iter.read_u16();
+					iter.ip.seek(SeekFrom::Current(-(offset as i64))).unwrap();
 				}
 				Ok(Opcode::Return) => {
 					return Ok(());

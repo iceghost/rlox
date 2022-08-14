@@ -6,5 +6,5 @@ repl:
 file file:
     cargo run --bin {{BIN}} -- {{file}}
 
-miri file:
-    MIRIFLAGS="-Zmiri-disable-isolation" cargo +nightly miri run --bin {{BIN}} -- {{file}}
+miri file *flags:
+    MIRIFLAGS="-Zmiri-disable-isolation {{flags}}" cargo +nightly miri run --bin {{BIN}} -- {{file}}

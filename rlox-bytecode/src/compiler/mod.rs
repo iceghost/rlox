@@ -130,6 +130,22 @@ impl<'a> Compilation<'a> {
 		self.emit_bytes([Opcode::DefineGlobal as u8, global]);
 	}
 
+	fn and(&mut self, _: bool) {
+		let end_jump = self.emit_jump(Opcode::JumpIfFalse);
+		self.emit_bytes([Opcode::Pop as u8]);
+		self.parse_precedence(Precedence::And);
+		self.patch_jump(end_jump);
+	}
+
+	fn or(&mut self, _: bool) {
+		let else_jump = self.emit_jump(Opcode::JumpIfFalse);
+		let end_jump = self.emit_jump(Opcode::Jump);
+		self.patch_jump(else_jump);
+		self.emit_bytes([Opcode::Pop as u8]);
+		self.parse_precedence(Precedence::Or);
+		self.patch_jump(end_jump);
+	}
+
 	fn mark_initialized(&mut self) {
 		let last = self.current.locals.last_mut().unwrap();
 		last.depth = Some(self.current.scope_depth);
@@ -138,6 +154,12 @@ impl<'a> Compilation<'a> {
 	fn statement(&mut self) {
 		if self.parser.matches(Ty::Print) {
 			self.print_statement();
+		} else if self.parser.matches(Ty::If) {
+			self.if_statement();
+		} else if self.parser.matches(Ty::While) {
+			self.while_statement();
+		} else if self.parser.matches(Ty::For) {
+			self.for_statement();
 		} else if self.parser.matches(Ty::LeftBrace) {
 			self.begin_scope();
 			self.block();
@@ -145,6 +167,73 @@ impl<'a> Compilation<'a> {
 		} else {
 			self.expression_statement();
 		}
+	}
+
+	fn if_statement(&mut self) {
+		self.parser.consume(Ty::LeftParen, "Expect '(' after 'if'.");
+		self.expression();
+		self.parser
+			.consume(Ty::RightParen, "Expect ')' after 'if'.");
+
+		let then_jump = self.emit_jump(Opcode::JumpIfFalse);
+		self.emit_bytes([Opcode::Pop as u8]);
+		self.statement();
+		let else_jump = self.emit_jump(Opcode::Jump);
+		self.patch_jump(then_jump);
+		self.emit_bytes([Opcode::Pop as u8]);
+
+		if self.parser.matches(Ty::Else) {
+			self.statement();
+		}
+		self.patch_jump(else_jump);
+	}
+
+	fn for_statement(&mut self) {
+		self.begin_scope();
+		self.parser
+			.consume(Ty::LeftParen, "Expect '(' after 'for'.");
+
+		if self.parser.matches(Ty::Semicolon) {
+		} else if self.parser.matches(Ty::Var) {
+			self.var_declaration();
+		} else {
+			self.expression_statement();
+		}
+
+		let mut loop_start = self.current_chunk().len();
+		let exit_jump = if !self.parser.matches(Ty::Semicolon) {
+			self.expression();
+			self.parser
+				.consume(Ty::Semicolon, "Expect ';' after loop condition.");
+			let exit_jump = self.emit_jump(Opcode::JumpIfFalse);
+			self.emit_bytes([Opcode::Pop as u8]);
+			Some(exit_jump)
+		} else {
+			None
+		};
+
+		if !self.parser.matches(Ty::RightParen) {
+			let body_jump = self.emit_jump(Opcode::Jump);
+			let increment_start = self.current_chunk().len();
+			self.expression();
+			self.emit_bytes([Opcode::Pop as u8]);
+			self.parser
+				.consume(Ty::RightParen, "Expect ')' after for clauses.");
+
+			self.emit_loop(loop_start);
+			loop_start = increment_start;
+			self.patch_jump(body_jump);
+		}
+
+		self.statement();
+		self.emit_loop(loop_start);
+
+		if let Some(exit_jump) = exit_jump {
+			self.patch_jump(exit_jump);
+			self.emit_bytes([Opcode::Pop as u8]);
+		}
+
+		self.end_scope();
 	}
 
 	fn block(&mut self) {
@@ -166,6 +255,8 @@ impl<'a> Compilation<'a> {
 			if local.depth > Some(self.current.scope_depth) {
 				self.emit_bytes([Opcode::Pop as u8]);
 				self.current.locals.pop();
+			} else {
+				break;
 			}
 		}
 	}
@@ -175,6 +266,24 @@ impl<'a> Compilation<'a> {
 		self.parser
 			.consume(Ty::Semicolon, "Expect ';' after value.");
 		self.emit_bytes([Opcode::Print as u8])
+	}
+
+	fn while_statement(&mut self) {
+		let loop_start = self.current_chunk().len();
+
+		self.parser
+			.consume(Ty::LeftParen, "Expect '(' after 'while'.");
+		self.expression();
+		self.parser
+			.consume(Ty::RightParen, "Expect ')' after condition.");
+
+		let exit_jump = self.emit_jump(Opcode::JumpIfFalse);
+		self.emit_bytes([Opcode::Pop as u8]);
+		self.statement();
+		self.emit_loop(loop_start);
+
+		self.patch_jump(exit_jump);
+		self.emit_bytes([Opcode::Pop as u8]);
 	}
 
 	fn expression_statement(&mut self) {
@@ -315,6 +424,21 @@ impl<'a> Compilation<'a> {
 		}
 	}
 
+	fn emit_jump(&mut self, instruction: Opcode) -> usize {
+		self.emit_bytes([instruction as u8, 0xff, 0xff]);
+		self.current_chunk_mut().len() - 2
+	}
+
+	fn patch_jump(&mut self, offset: usize) {
+		let jump = self.current_chunk().len() as isize - offset as isize - 2;
+		if jump > u16::MAX as isize {
+			self.parser.error("Too much code to jump over.");
+		}
+		let code = self.current_chunk_mut().code_mut();
+		code[offset] = (jump >> 8) as u8;
+		code[offset + 1] = jump as u8;
+	}
+
 	fn emit_constant(&mut self, value: impl Into<Value>) {
 		let constant = self.make_constant(value);
 		self.emit_bytes([Opcode::Constant as u8, constant]);
@@ -327,6 +451,16 @@ impl<'a> Compilation<'a> {
 		}
 	}
 
+	fn emit_loop(&mut self, loop_start: usize) {
+		self.emit_bytes([Opcode::Loop as u8]);
+
+		let offset = self.current_chunk().len() - loop_start + 2;
+		if offset > u16::MAX as usize {
+			self.parser.error("Loop body too large.");
+		}
+		self.emit_bytes((offset as u16).to_be_bytes());
+	}
+
 	#[inline]
 	pub fn into_chunk(self) -> Chunk {
 		self.compiling_chunk
@@ -335,6 +469,11 @@ impl<'a> Compilation<'a> {
 	#[inline]
 	fn current_chunk_mut(&mut self) -> &mut Chunk {
 		&mut self.compiling_chunk
+	}
+
+	#[inline]
+	fn current_chunk(&mut self) -> &Chunk {
+		&self.compiling_chunk
 	}
 }
 
@@ -420,7 +559,7 @@ fn get_rule<'a>(operator: Ty) -> ParseRule<'a> {
         Ty::Identifier   => (Some(Compilation::variable), None,                      Precedence::None),
         Ty::String       => (Some(Compilation::string),   None,                      Precedence::None),
         Ty::Number       => (Some(Compilation::number),   None,                      Precedence::None),
-        Ty::And          => (None,                        None,                      Precedence::None),
+        Ty::And          => (None,                        Some(Compilation::and),    Precedence::And),
         Ty::Class        => (None,                        None,                      Precedence::None),
         Ty::Else         => (None,                        None,                      Precedence::None),
         Ty::False        => (Some(Compilation::literal),  None,                      Precedence::None),
@@ -428,7 +567,7 @@ fn get_rule<'a>(operator: Ty) -> ParseRule<'a> {
         Ty::Fun          => (None,                        None,                      Precedence::None),
         Ty::If           => (None,                        None,                      Precedence::None),
         Ty::Nil          => (Some(Compilation::literal),  None,                      Precedence::None),
-        Ty::Or           => (None,                        None,                      Precedence::None),
+        Ty::Or           => (None,                        Some(Compilation::or),     Precedence::Or),
         Ty::Print        => (None,                        None,                      Precedence::None),
         Ty::Return       => (None,                        None,                      Precedence::None),
         Ty::Super        => (None,                        None,                      Precedence::None),

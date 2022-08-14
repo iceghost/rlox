@@ -26,6 +26,9 @@ pub enum Opcode {
 	Not,
 	Negate,
 	Print,
+	Jump,
+	JumpIfFalse,
+	Loop,
 	Return,
 }
 
@@ -63,6 +66,11 @@ impl Chunk {
 		self.code.as_ref()
 	}
 
+	#[inline ]
+	pub fn code_mut(&mut self) -> &mut [u8] {
+		self.code.as_mut()
+	}
+
 	#[inline]
 	pub fn constants(&self) -> &Values {
 		&self.constants
@@ -71,5 +79,10 @@ impl Chunk {
 	#[inline]
 	pub fn lines(&self) -> &[usize] {
 		self.lines.as_ref()
+	}
+
+	#[inline]
+	pub fn len(&self) -> usize {
+		self.code.len()
 	}
 }
